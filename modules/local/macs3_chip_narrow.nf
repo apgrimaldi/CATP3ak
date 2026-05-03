@@ -12,18 +12,20 @@ process MACS3_CHIP_NARROW {
     path "versions.yml"                  , emit: versions
 
     script:
-    def prefix = "${meta.id}_narrow"
-    def format = meta.single_end ? 'BAM' : 'BAMPE'
+    def prefix   = "${meta.id}_narrow"
+    def format   = meta.single_end ? 'BAM' : 'BAMPE'
+    
+    // Converte hg38 o GRCh38 in 'hs' (human), altrimenti usa il valore originale
     def m_genome = (params.genome == 'hg38' || params.genome == 'GRCh38') ? 'hs' : params.genome
-"""
+
+    """
     macs3 callpeak \\
         -t $ip_bam \\
         -c $control_bam \\
         -f $format \\
-        -g $genome \\
+        -g $m_genome \\
         -n $prefix \\
         --qvalue 0.05
-
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
