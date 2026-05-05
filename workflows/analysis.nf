@@ -120,8 +120,9 @@ workflow ATAC_CHIP_PIPELINE {
         HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta_file), file(gtf_file) )
     }
 
-    // 12. MULTIQC
+   // 12. MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
+    
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'),
@@ -130,10 +131,10 @@ workflow ATAC_CHIP_PIPELINE {
         BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
         PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
-        DEEPTOOLS.out.bw.collect().ifEmpty([]), 
+        DEEPTOOLS.out.bw.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]), 
         ch_peaks.map{ it[1] }.collect().ifEmpty([]),
-        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),       
-        HOMER_ANNOTATEPEAKS.out.txt.map{ it[1] }.collect().ifEmpty([]),
+        CALC_FRIP.out.frip.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),       
+        HOMER_ANNOTATEPEAKS.out.txt.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
         ch_versions_multiqc.collect()
     )
 }
