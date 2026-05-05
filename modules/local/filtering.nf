@@ -2,7 +2,6 @@ process FILTERING {
     tag "$meta.id"
     label 'process_medium'
     
-    // Manteniamo il tuo container originale come richiesto
     container 'quay.io/biocontainers/bedtools:2.30.0--hc088bd4_0'
 
     publishDir "${params.outdir}/04_filtered", mode: 'copy'
@@ -28,8 +27,8 @@ process FILTERING {
     fi
 
     # 2. Rimozione Blacklist con bedtools
-    # -v: esclude le zone della blacklist
-    # -abam: mantiene il formato BAM in uscita
+    # -v: 
+    # -abam: 
     bedtools intersect \\
         -v \\
         -abam $bam \\
