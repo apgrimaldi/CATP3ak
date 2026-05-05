@@ -82,7 +82,7 @@ ch_versions = ch_versions.mix(DEEPTOOLS.out.versions)
 // Usiamo .join o ci assicuriamo che l'output sia una tupla
 DEEPTOOLS_TSS ( 
     DEEPTOOLS.out.bw, 
-    file(params.gtf) 
+    file(gtf_file) 
 )
 
     // 9. Peak Calling
