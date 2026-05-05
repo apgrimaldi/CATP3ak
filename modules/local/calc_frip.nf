@@ -3,7 +3,7 @@ process CALC_FRIP {
     label 'process_medium'
 
     // Usiamo lo stesso container di nf-core che contiene bedtools e samtools
-    container "quay.io/biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
+    container 'biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0' }"
 
     input:
     tuple val(meta), path(bam), path(peak)
