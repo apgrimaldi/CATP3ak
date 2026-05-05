@@ -20,22 +20,15 @@ include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 
 workflow ATAC_CHIP_PIPELINE {
     take:
-    ch_input
+    ch_input    // Dal main.nf
+    ch_index    // Dal main.nf
 
     main:
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
     // --- GESTIONE DINAMICA RISORSE GENOMA ---
-    // 1. Indice Bowtie2: usa --bowtie2_index se presente, altrimenti cerca nel config
-    def bt2_path = params.bowtie2_index ?: params.genomes[ params.genome ]?.bowtie2
-    if (!bt2_path) { error "Manca l'indice Bowtie2! Usa --bowtie2_index '/percorso/cartella'" }
-    ch_index = Channel.fromPath("${bt2_path}/*.bt2*", checkIfExists: true).collect()
-
-    // 2. Blacklist: usa --blacklist_file se presente, altrimenti cerca nel config
     def blacklist_path = params.blacklist_file ?: params.genomes[ params.genome ]?.blacklist ?: null
-
-    // 3. Fasta e GTF per Annotazione: usa i flag o il config
     def fasta_file = params.fasta_file ?: params.genomes[ params.genome ]?.fasta ?: null
     def gtf_file   = params.gtf_file   ?: params.genomes[ params.genome ]?.gtf   ?: null
 
@@ -49,7 +42,7 @@ workflow ATAC_CHIP_PIPELINE {
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(TRIMGALORE.out.versions)
 
-    // 3. Allineamento (Usa ch_index creato sopra)
+    // 3. Allineamento (Usa ch_index passato dal main)
     BOWTIE2 ( TRIMGALORE.out.reads, ch_index )
     ch_versions = ch_versions.mix(BOWTIE2.out.versions)
 
@@ -80,8 +73,9 @@ workflow ATAC_CHIP_PIPELINE {
     SAMTOOLS_STATS ( ch_final_bams.map { it -> [ it[0], it[1] ] } )
     ch_versions = ch_versions.mix(SAMTOOLS_STATS.out.versions)
 
-    // 8. DeepTools
+    // 8. DeepTools (Fingerprint e BigWig)
     DEEPTOOLS ( ch_final_bams )
+    ch_versions = ch_versions.mix(DEEPTOOLS.out.versions)
 
     // 9. Peak Calling
     ch_peaks = Channel.empty()
@@ -121,7 +115,7 @@ workflow ATAC_CHIP_PIPELINE {
     ch_frip_input = ch_final_bams.map { it -> [ it[0], it[1] ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
-    // 11. Annotazione (Usa i percorsi dinamici fasta_file e gtf_file)
+    // 11. Annotazione
     if (fasta_file && gtf_file) {
         HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta_file), file(gtf_file) )
     }
