@@ -15,8 +15,7 @@ process MULTIQC {
     path ('deeptools/*')     // 8  
     path ('macs3/*')         // 9
     path ('frip/*')          
-    path ('homer/*')         
-    path ('tss/*')           
+    path ('homer/*')                   
     path versions
 
     output:
