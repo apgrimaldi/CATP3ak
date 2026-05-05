@@ -10,11 +10,10 @@ process DEEPTOOLS {
     // Rimuoviamo l'obbligo del file BED qui se non lo usiamo
 
     output:
-    path "*.fingerprint.pdf"    , emit: fingerprint_pdf
-    path "*.fingerprint.txt"    , emit: fingerprint_txt 
-    path "*.bigWig"             , emit: bw
-    path "versions.yml"         , emit: versions
-    // Rimuoviamo i profili dagli output
+    tuple val(meta), path("*.bigWig")       , emit: bw
+    tuple val(meta), path("*.fingerprint.pdf") , emit: fingerprint_pdf
+    tuple val(meta), path("*.fingerprint.txt") , emit: fingerprint_txt 
+    path "versions.yml"                     , emit: versions
 
     script:
     def prefix = "${meta.id}"
