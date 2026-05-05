@@ -27,9 +27,20 @@ process PREPARE_TSS_BED {
     output: path "tss_regions.bed"
     script:
     """
-    awk '\$3=="transcript"' $gtf | \\
-    awk 'BEGIN{OFS="\\t"}{if(\$7=="+") print \$1,\$4,\$4+1,\$10,".",\$7; else print \$1,\$5-1,\$5,\$10,".",\$7}' | \\
-    sed 's/;//g; s/\"//g' > tss_regions.bed
+    # 1. Filtra i trascrizioni
+    # 2. Calcola il TSS (1bp) in base allo strand
+    # 3. Assicura che l'output sia strettamente separato da TAB
+    # 4. Rimuove eventuali virgolette residue dai nomi dei geni
+    awk '\$3 == "transcript"' $gtf | \\
+    awk 'BEGIN {OFS="\\t"} { \\
+        if (\$7 == "+") \\
+            {start=\$4-1; end=\$4} \\
+        else \\
+            {start=\$5-1; end=\$5} \\
+        print \$1, start, end, \$10, ".", \$7 \\
+    }' | \\
+    sed 's/[";]//g' | \\
+    awk 'NF == 6' > tss_regions.bed
     """
 }
 
