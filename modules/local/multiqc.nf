@@ -12,11 +12,11 @@ process MULTIQC {
     path ('alignment/*')     // 5
     path ('picard/*')        // 6
     path ('samtools/*')      // 7
-    path ('deeptools/*')     // 8  <-- Assicurati che questo ci sia
+    path ('deeptools/*')     // 8  
     path ('macs3/*')         // 9
     path ('frip/*')          // 10
-    path ('homer/*')         // 11 <-- Aggiunto/Verificato
-    path versions            // 12 <-- Questo è il dodicesimo
+    path ('homer/*')         // 11 
+    path versions            // 12 
 
     output:
     path "*multiqc_report.html", emit: report
