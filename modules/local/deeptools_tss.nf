@@ -6,33 +6,36 @@ process DEEPTOOLS_TSS {
     publishDir "${params.outdir}/07_advanced_qc/tss_profiles", mode: 'copy'
 
     input:
-    tuple val(meta), path(bw)  // Riceve il .bigWig dal modulo DEEPTOOLS
-    path gtf                   // Riceve il GTF del genoma
+    tuple val(meta), path(bw)
+    path gtf
 
     output:
-    path "*.tss_profile.pdf"    , emit: pdf
-    path "*.matrix.gz"          , emit: matrix
-    path "versions.yml"         , emit: versions
+    tuple val(meta), path("*.tss.matrix.gz"), emit: matrix
+    path "*.tss.png"                       , emit: png
+    path "*.tss.tab"                       , emit: table 
+    path "versions.yml"                    , emit: versions
 
     script:
     def prefix = "${meta.id}"
     """
     # 1. Calcola la matrice centrata sul TSS
+    # Cambiato il nome file in .tss.matrix.gz per matchare l'output
     computeMatrix reference-point \\
         --referencePoint TSS \\
         -S $bw \\
         -R $gtf \\
         -a 3000 -b 3000 \\
         --skipZeros \\
-        -o ${prefix}.matrix.gz \\
+        -o ${prefix}.tss.matrix.gz \\
         --numberOfProcessors $task.cpus
 
-    # 2. Genera il grafico
+    # 2. Genera il grafico e i DATI (tab) per MultiQC
+    # MultiQC ha bisogno del file .tab per generare il grafico interattivo
     plotProfile \\
-        -m ${prefix}.matrix.gz \\
-        -out ${prefix}.tss_profile.pdf \\
-        --plotTitle "${prefix} TSS Profile" \\
-        --perGroup
+        -m ${prefix}.tss.matrix.gz \\
+        -out ${prefix}.tss.png \\
+        --outFileNameData ${prefix}.tss.tab \\
+        --plotTitle "${prefix} TSS Profile"
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
