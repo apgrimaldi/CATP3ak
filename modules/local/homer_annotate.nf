@@ -1,30 +1,31 @@
 process HOMER_ANNOTATEPEAKS {
     tag "$meta.id"
     label 'process_medium'
-
-    // Questa versione è verificata e stabile su quay.io
     container 'quay.io/biocontainers/homer:4.11--pl526hc9558a2_3'
+
+    // Rimuoviamo temporaneamente variabili dal publishDir se ne avevi nel config
+    publishDir "${params.outdir}/05_annotation", mode: 'copy'
 
     input:
     tuple val(meta), path(peak)
-    path  fasta
-    path  gtf
+    path fasta
+    path gtf
 
     output:
-    // Manteniamo esattamente il nome che si aspetta il tuo workflow
-    tuple val(meta), path("*.annotatePeaks.txt"), emit: txt
-    path  "versions.yml"                        , emit: versions
+    // Usiamo una wildcard semplice per l'output
+    tuple val(meta), path("*.txt"), emit: txt
+    path "versions.yml"           , emit: versions
 
     script:
-    // USA meta.id: è una stringa garantita, evita l'errore 'null object'
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    // Definiamo il nome del file in modo statico e sicuro
+    def sample_id = meta.id
     """
     annotatePeaks.pl \\
         $peak \\
         $fasta \\
         -gtf $gtf \\
         -cpu $task.cpus \\
-        > ${prefix}.annotatePeaks.txt
+        > ${sample_id}.annotatePeaks.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
