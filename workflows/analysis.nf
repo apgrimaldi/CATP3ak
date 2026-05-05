@@ -132,6 +132,8 @@ workflow ATAC_CHIP_PIPELINE {
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
         DEEPTOOLS.out.bw.collect().ifEmpty([]), 
         ch_peaks.map{ it[1] }.collect().ifEmpty([]),
+        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),       
+        HOMER_ANNOTATEPEAKS.out.txt.map{ it[1] }.collect().ifEmpty([]),
         ch_versions_multiqc.collect()
     )
 }
