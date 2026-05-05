@@ -20,34 +20,7 @@ include { SAMTOOLS_INDEX }          from '../modules/local/samtools_index.nf'
 include { DEEPTOOLS_COMPUTEMATRIX } from '../modules/local/deeptools_computematrix.nf'
 include { DEEPTOOLS_PLOTPROFILE }   from '../modules/local/deeptools_plotprofile.nf'
 
-process PREPARE_TSS_BED {
-    executor 'local'
-    input:  path gtf
-    output: path "tss_regions.bed"
-    script:
-    """
-    # 1. Identifichiamo la feature corretta (transcript o exon)
-    FEATURE=\$(grep -q "transcript" $gtf && echo "transcript" || echo "exon")
 
-    # 2. Estraiamo e formattiamo
-    awk -v f="\$FEATURE" 'BEGIN{OFS="\\t"} \$3==f {
-        # Rimuoviamo caratteri fastidiosi dalle colonne 1, 4, 5, 7, 10
-        gsub(/[";]/, "", \$10);
-        if (\$7 == "+") {start=\$4-1; end=\$4}
-        else {start=\$5-1; end=\$5}
-        if (start >= 0) print \$1, start, end, \$10, "0", \$7
-    }' $gtf | sort -k1,1 -k2,2n | uniq > tss_regions.bed
-
-    # 3. Controllo di emergenza: se il file è vuoto, usa i geni
-    if [ ! -s tss_regions.bed ]; then
-        awk 'BEGIN{OFS="\\t"} \$3=="gene" {
-            gsub(/[";]/, "", \$10);
-            if (\$7 == "+") {start=\$4-1; end=\$4} else {start=\$5-1; end=\$5}
-            print \$1, start, end, \$10, "0", \$7
-        }' $gtf | sort -k1,1 -k2,2n | uniq > tss_regions.bed
-    fi
-    """
-}
 workflow ATAC_CHIP_PIPELINE {
     take:
     ch_input
@@ -111,17 +84,6 @@ workflow ATAC_CHIP_PIPELINE {
     DEEPTOOLS ( ch_final_bams )
     ch_versions = ch_versions.mix(DEEPTOOLS.out.versions)
 
-    // 8b. TSS Profiling (Usa il canale ch_tss_bed creato sopra)
-    DEEPTOOLS_COMPUTEMATRIX ( 
-        DEEPTOOLS.out.bw, 
-        ch_tss_bed.collect() 
-    )
-    
-    DEEPTOOLS_PLOTPROFILE ( 
-        DEEPTOOLS_COMPUTEMATRIX.out.matrix 
-    )
-    ch_versions = ch_versions.mix(DEEPTOOLS_PLOTPROFILE.out.versions)
-
     // 9. Peak Calling
     ch_peaks = Channel.empty()
     ch_frip_peaks = Channel.empty() 
@@ -180,7 +142,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_peaks.map{ it[1] }.collect().ifEmpty([]),
         CALC_FRIP.out.frip.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),       
         HOMER_ANNOTATEPEAKS.out.txt.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
-        DEEPTOOLS_PLOTPROFILE.out.table.map{ it[1] }.collect().ifEmpty([]), 
         ch_versions_multiqc.collect()                  
     )
 }
