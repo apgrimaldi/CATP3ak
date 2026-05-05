@@ -5,17 +5,18 @@ process MULTIQC {
     publishDir "${params.outdir}/00_MultiQC", mode: 'copy'
 
     input:
-    path multiqc_config      
-    path workflow_summary    
-    path ('fastqc/*')        
-    path ('trimgalore/*')    
-    path ('alignment/*')     
-    path ('picard/*')        
-    path ('samtools/*')      
-    path ('macs3/*')         
-    path ('frip/*')          // I tuoi file .FRiP.txt finiscono qui
-    path ('annotations/*')   // Aggiunto per le annotazioni (Homer/ChIPseeker)
-    path versions            
+    path multiqc_config      // 1
+    path workflow_summary    // 2
+    path ('fastqc/*')        // 3
+    path ('trimgalore/*')    // 4
+    path ('alignment/*')     // 5
+    path ('picard/*')        // 6
+    path ('samtools/*')      // 7
+    path ('deeptools/*')     // 8  <-- Assicurati che questo ci sia
+    path ('macs3/*')         // 9
+    path ('frip/*')          // 10
+    path ('homer/*')         // 11 <-- Aggiunto/Verificato
+    path versions            // 12 <-- Questo è il dodicesimo
 
     output:
     path "*multiqc_report.html", emit: report
