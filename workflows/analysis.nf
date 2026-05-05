@@ -21,11 +21,25 @@ include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 workflow ATAC_CHIP_PIPELINE {
     take:
     ch_input
-    ch_index
 
     main:
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
+
+    // --- GESTIONE DINAMICA RISORSE GENOMA ---
+    // 1. Indice Bowtie2: usa --bowtie2_index se presente, altrimenti cerca nel config
+    def bt2_path = params.bowtie2_index ?: params.genomes[ params.genome ]?.bowtie2
+    if (!bt2_path) { error "Manca l'indice Bowtie2! Usa --bowtie2_index '/percorso/cartella'" }
+    ch_index = Channel.fromPath("${bt2_path}/*.bt2*", checkIfExists: true).collect()
+
+    // 2. Blacklist: usa --blacklist_file se presente, altrimenti cerca nel config
+    def blacklist_path = params.blacklist_file ?: params.genomes[ params.genome ]?.blacklist ?: null
+
+    // 3. Fasta e GTF per Annotazione: usa i flag o il config
+    def fasta_file = params.fasta_file ?: params.genomes[ params.genome ]?.fasta ?: null
+    def gtf_file   = params.gtf_file   ?: params.genomes[ params.genome ]?.gtf   ?: null
+
+    // --- INIZIO STEPS ---
 
     // 1. Qualità iniziale
     FASTQC ( ch_input )
@@ -35,7 +49,7 @@ workflow ATAC_CHIP_PIPELINE {
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(TRIMGALORE.out.versions)
 
-    // 3. Allineamento
+    // 3. Allineamento (Usa ch_index creato sopra)
     BOWTIE2 ( TRIMGALORE.out.reads, ch_index )
     ch_versions = ch_versions.mix(BOWTIE2.out.versions)
 
@@ -51,25 +65,22 @@ workflow ATAC_CHIP_PIPELINE {
     }
 
     // 6. Filtraggio Blacklist
-    def blacklist_val = params.genomes[ params.genome ]?.blacklist ?: null
-    
-    if (blacklist_val) {
-        ch_blacklist = file(blacklist_val)
+    if (blacklist_path) {
+        ch_blacklist = file(blacklist_path)
         FILTERING ( ch_picard_bams, ch_blacklist )
         SAMTOOLS_INDEX ( FILTERING.out.bam )
         ch_final_bams = SAMTOOLS_INDEX.out.bam_bai
         ch_versions = ch_versions.mix(FILTERING.out.versions, SAMTOOLS_INDEX.out.versions)
     } else {
-        // Se non c'è blacklist, indicizziamo direttamente l'output di Picard
         SAMTOOLS_INDEX ( ch_picard_bams.map { it -> [it[0], it[1]] } )
         ch_final_bams = SAMTOOLS_INDEX.out.bam_bai
     }
 
-    // 7. Statistiche Allineamento (Parte appena il BAM è pronto)
+    // 7. Statistiche Allineamento
     SAMTOOLS_STATS ( ch_final_bams.map { it -> [ it[0], it[1] ] } )
     ch_versions = ch_versions.mix(SAMTOOLS_STATS.out.versions)
 
-    // 8. DeepTools (Parte in parallelo a MACS3)
+    // 8. DeepTools
     DEEPTOOLS ( ch_final_bams )
 
     // 9. Peak Calling
@@ -78,58 +89,45 @@ workflow ATAC_CHIP_PIPELINE {
 
     if (params.protocol == 'atac') {
         ch_macs_input = ch_final_bams.map { it -> [ it[0], it[1] ] }
-        
         MACS3_ATAC_NARROW ( ch_macs_input )
         MACS3_ATAC_BROAD  ( ch_macs_input )
-        
         ch_peaks = MACS3_ATAC_NARROW.out.peaks.mix(MACS3_ATAC_BROAD.out.peaks)
         ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks 
     } 
     else if (params.protocol == 'chip') {
-        // Separiamo i Controlli (Input/IgG)
         ch_control_bams = ch_final_bams
             .filter { it -> 
                 def m = it[0]
                 m.antibody == 'none' || !m.antibody || m.antibody == 'IgG' || m.antibody == '' 
             }
-            .map { it -> [ it[0].id, it[1] ] } // Chiave: ID del controllo
+            .map { it -> [ it[0].id, it[1] ] }
 
-        // Separiamo gli IP e li uniamo ai rispettivi controlli
         ch_macs3_chip_input = ch_final_bams
             .filter { it -> 
                 def m = it[0]
                 m.antibody && m.antibody != 'none' && m.antibody != 'IgG' && m.antibody != '' 
             }
-            .map { it -> [ it[0].control, it[0], it[1] ] } // Chiave: ID del controllo cercato
-            .join(ch_control_bams) // Unisce l'IP al suo BAM di controllo
-            .map { it -> [ it[1], it[2], it[3] ] } // Formato: [meta, ip_bam, control_bam]
+            .map { it -> [ it[0].control, it[0], it[1] ] } 
+            .join(ch_control_bams) 
+            .map { it -> [ it[1], it[2], it[3] ] }
 
         MACS3_CHIP_NARROW ( ch_macs3_chip_input )
         MACS3_CHIP_BROAD  ( ch_macs3_chip_input )
-        
         ch_peaks = MACS3_CHIP_NARROW.out.peaks.mix(MACS3_CHIP_BROAD.out.peaks)
         ch_frip_peaks = MACS3_CHIP_NARROW.out.peaks
     }
 
-    // 10. FRiP (Eseguito non appena i picchi di un campione sono pronti)
-    ch_frip_input = ch_final_bams
-        .map { it -> [ it[0], it[1] ] }
-        .join(ch_frip_peaks)
-    
+    // 10. FRiP
+    ch_frip_input = ch_final_bams.map { it -> [ it[0], it[1] ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
-    // 11. Annotazione
-    def fasta = params.genomes[ params.genome ]?.fasta ?: null
-    def gtf   = params.genomes[ params.genome ]?.gtf   ?: null
-    if (fasta && gtf) {
-        HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta), file(gtf) )
+    // 11. Annotazione (Usa i percorsi dinamici fasta_file e gtf_file)
+    if (fasta_file && gtf_file) {
+        HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta_file), file(gtf_file) )
     }
 
-   // 12. MULTIQC
-    ch_versions_multiqc = ch_versions
-        .unique()
-        .collectFile(name: 'collated_versions.yml')
-
+    // 12. MULTIQC
+    ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'),
@@ -140,6 +138,6 @@ workflow ATAC_CHIP_PIPELINE {
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
         DEEPTOOLS.out.bw.collect().ifEmpty([]), 
         ch_peaks.map{ it[1] }.collect().ifEmpty([]),
-        ch_versions_multiqc.collect() // Passiamo il file collezionato
+        ch_versions_multiqc.collect()
     )
 }
