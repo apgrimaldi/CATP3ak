@@ -9,20 +9,18 @@ process MACS3_CHIP_NARROW {
     output:
     tuple val(meta), path("*.narrowPeak"), emit: peaks
     tuple val(meta), path("*.xls")       , emit: xls
+    path "*.narrow_counts.txt"           , emit: count_narrow // <--- AGGIUNTO PER MULTIQC
     path "versions.yml"                  , emit: versions
 
     script:
     def prefix   = "${meta.id}_narrow"
     def format   = meta.single_end ? 'BAM' : 'BAMPE'
     
-    // Mappa per la traduzione automatica dei genomi
     def genome_map = [
         'hg38': 'hs', 'GRCh38': 'hs', 'hg19': 'hs',
         'mm10': 'mm', 'mm9': 'mm', 'GRCm38': 'mm',
         'dm6': 'dm', 'ce11': 'ce'
     ]
-    
-    // Traduzione dinamica: se non trova il match, usa il valore di params.genome
     def m_genome = genome_map[params.genome] ?: params.genome
 
     """
@@ -33,6 +31,10 @@ process MACS3_CHIP_NARROW {
         -g $m_genome \\
         -n $prefix \\
         --qvalue 0.05
+
+    # Genera il file di conteggio specifico per i NARROW
+    count=\$(wc -l < ${prefix}_peaks.narrowPeak)
+    echo -e "${meta.id}\t\$count" > ${meta.id}.narrow_counts.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
