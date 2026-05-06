@@ -124,12 +124,24 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // 12. MULTIQC
+// 12. PREPARAZIONE CANALI PER MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
-    
-    // Uniamo i conteggi narrow e broad in un unico canale per i grafici custom
-    ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
+    // FIX COLLISIONE: Rinominiano i file dei conteggi per renderli univoci
+    ch_multiqc_counts = ch_narrow_counts_mqc
+        .map { meta, file -> 
+            def new_file = file.name.contains('narrow') ? file : file.renameTo("${meta.id}.narrow_counts.txt")
+            return file
+        }
+        .mix(
+            ch_broad_counts_mqc.map { meta, file -> 
+                def new_file = file.name.contains('broad') ? file : file.renameTo("${meta.id}.broad_counts.txt")
+                return file
+            }
+        )
+        .collect().ifEmpty([])
+
+    // 13. CHIAMATA MULTIQC
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'),
@@ -138,22 +150,11 @@ workflow ATAC_CHIP_PIPELINE {
         BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
         PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
-        
-        // --- FIX FINGERPRINT ---
         DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.collect().ifEmpty([]), 
-        
-        // --- LOG PEAK CALLING ---
         ch_macs_logs_mqc.collect().ifEmpty([]), 
-        
-        // --- GRAFICI CUSTOM (CONTEGGI) ---
-        ch_all_counts_mqc,                      
-        
-        // --- FRiP ---
+        ch_multiqc_counts,                      
         CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]), 
-        
-        // --- HOMER ---
         ch_homer_mqc,
-        
         ch_versions_multiqc.collect()                                       
     )
 }
