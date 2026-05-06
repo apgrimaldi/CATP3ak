@@ -1,51 +1,105 @@
 title: "Analisi ChIP-seq / ATAC-seq"
 subtitle: "Report Risultati Pipeline"
 
-# Ordine delle sezioni: definisce la gerarchia del report
+# --- ORDINE DELLE SEZIONI ---
+# Definisce l'ordine di comparsa nel report (dal primo all'ultimo)
 report_section_order:
-    fastqc:
-        order: -90
-    trim_galore:
-        order: -80
-    bowtie2:
-        order: -70
-    samtools:
-        order: -60
-    picard:
-        order: -50
-    macs3:
-        order: -40
-    frip_score:         # Deve corrispondere all'ID sotto in custom_data
-        order: -30
-    peak_annotations:   # Sezione per le annotazioni
-        order: -20
-    software_versions:
-        order: -10
+  fastqc:
+    order: -100
+  trim_galore:
+    order: -90
+  bowtie2:
+    order: -80
+  samtools:
+    order: -70
+  picard:
+    order: -60
+  macs3_narrow_count:
+    order: -50
+  macs3_broad_count:
+    order: -40
+  frip_score:
+    order: -30
+  peak_annotations:
+    order: -20
+  software_versions:
+    order: -10
 
-# Rimuove i suffissi dai nomi dei campioni per pulire i grafici
+# --- PULIZIA NOMI CAMPIONI ---
 sample_names_replace_suffixes:
-    - "_trimmed"
-    - "_aligned"
-    - ".sorted"
-    - ".filtered"
-    - "_peaks"
-    - ".summary"
-    - ".FRiP"
+  - "_trimmed"
+  - "_val_1"
+  - "_val_2"
+  - "_aligned"
+  - ".sorted"
+  - ".filtered"
+  - "_peaks"
+  - ".narrowPeak"
+  - ".broadPeak"
+  - ".narrow_counts"
+  - ".broad_counts"
+  - ".FRiP"
+  - ".homer_stats"
 
-# Nasconde i percorsi locali dei file per privacy/ordine
-show_analysis_paths: false
-
-# CONFIGURAZIONE CUSTOM PER FRIP E ANNOTAZIONI
+# --- CONFIGURAZIONE GRAFICI PERSONALIZZATI ---
 custom_data:
+  # Grafico Narrow Peaks (identico allo screenshot)
+  macs3_narrow_count:
+    file_format: "tsv"
+    section_name: "MERGED LIB: MACS3 Narrow Peak Count"
+    description: "Numero totale di picchi narrow chiamati da <a href='https://github.com/macs3-project/MACS'>MACS3</a>."
+    plot_type: "bargraph"
+    pconfig:
+      id: "macs3_narrow_plot"
+      title: "Total Narrow Peak Count"
+      ylab: "Peak Count"
+      cpswitch: true
+
+  # Grafico Broad Peaks
+  macs3_broad_count:
+    file_format: "tsv"
+    section_name: "MERGED LIB: MACS3 Broad Peak Count"
+    description: "Numero totale di picchi broad chiamati da <a href='https://github.com/macs3-project/MACS'>MACS3</a>."
+    plot_type: "bargraph"
+    pconfig:
+      id: "macs3_broad_plot"
+      title: "Total Broad Peak Count"
+      ylab: "Peak Count"
+      cpswitch: true
+
+  # Tabella FRiP Score
   frip_score:
     file_format: "tsv"
     section_name: "FRiP Score"
     description: "Fraction of Reads in Peaks: indica la qualità dell'arricchimento del segnale."
     plot_type: "table"
     pconfig:
-      format: "{:,.4f}"
+      format: "{:.4f}"
 
-# Se i tuoi file di annotazione sono tabelle semplici (es. da HOMER o script custom)
+  # Grafico Annotazioni HOMER
+  peak_annotations:
+    file_format: "tsv"
+    section_name: "HOMER: Peak Annotations"
+    description: "Distribuzione genomica dei picchi (Promoters, Introns, etc.)."
+    plot_type: "bargraph"
+    pconfig:
+      id: "homer_annot_plot"
+      title: "Genomic Feature Distribution"
+      ylab: "% of Peaks"
+      cpswitch: true
+
+# --- SEARCH PATTERNS ---
+# Dice a MultiQC quali file cercare per riempire i grafici sopra
 sp:
+  macs3_narrow_count:
+    fn: "*.narrow_counts.txt"
+  macs3_broad_count:
+    fn: "*.broad_counts.txt"
   frip_score:
     fn: "*.FRiP.txt"
+  peak_annotations:
+    fn: "*.homer_stats.txt"
+
+# --- IMPOSTAZIONI GENERALI ---
+show_analysis_paths: false
+plots_force_interactive: true
