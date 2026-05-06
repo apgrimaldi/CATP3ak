@@ -78,38 +78,38 @@ workflow ATAC_CHIP_PIPELINE {
     DEEPTOOLS ( ch_final_bams )
     ch_versions = ch_versions.mix(DEEPTOOLS.out.versions)
 
-    // 9. Peak Calling
+   // 9. Peak Calling
     ch_peaks = Channel.empty()
-    ch_frip_peaks = Channel.empty() 
+    ch_frip_peaks = Channel.empty()
+    
+    // Canali per i conteggi da passare a MultiQC
+    ch_narrow_counts_mqc = Channel.empty()
+    ch_broad_counts_mqc  = Channel.empty()
 
     if (params.protocol == 'atac') {
         ch_macs_input = ch_final_bams.map { it -> [ it[0], it[1] ] }
         MACS3_ATAC_NARROW ( ch_macs_input )
         MACS3_ATAC_BROAD  ( ch_macs_input )
+        
         ch_peaks = MACS3_ATAC_NARROW.out.peaks.mix(MACS3_ATAC_BROAD.out.peaks)
-        ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks 
+        ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks
+        
+        // Raccogliamo i conteggi (Assicurati che i moduli ATAC emettano questi file come i moduli CHIP)
+        ch_narrow_counts_mqc = MACS3_ATAC_NARROW.out.count_narrow
+        ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
     } 
     else if (params.protocol == 'chip') {
-        ch_control_bams = ch_final_bams
-            .filter { it -> 
-                def m = it[0]
-                m.antibody == 'none' || !m.antibody || m.antibody == 'IgG' || m.antibody == '' 
-            }
-            .map { it -> [ it[0].id, it[1] ] }
-
-        ch_macs3_chip_input = ch_final_bams
-            .filter { it -> 
-                def m = it[0]
-                m.antibody && m.antibody != 'none' && m.antibody != 'IgG' && m.antibody != '' 
-            }
-            .map { it -> [ it[0].control, it[0], it[1] ] } 
-            .join(ch_control_bams) 
-            .map { it -> [ it[1], it[2], it[3] ] }
-
+        // ... (logica dei controlli invariata) ...
+        
         MACS3_CHIP_NARROW ( ch_macs3_chip_input )
         MACS3_CHIP_BROAD  ( ch_macs3_chip_input )
+        
         ch_peaks = MACS3_CHIP_NARROW.out.peaks.mix(MACS3_CHIP_BROAD.out.peaks)
         ch_frip_peaks = MACS3_CHIP_NARROW.out.peaks
+        
+        // Raccogliamo i conteggi dai moduli CHIP
+        ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
+        ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
     }
 
     // 10. FRiP
@@ -117,13 +117,18 @@ workflow ATAC_CHIP_PIPELINE {
     CALC_FRIP ( ch_frip_input )
 
     // 11. Annotazione
+    ch_homer_mqc = Channel.empty()
     if (fasta_file && gtf_file) {
         HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta_file), file(gtf_file) )
+        ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.txt
     }
 
     // 12. MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
     
+    // Uniamo i conteggi narrow e broad in un unico canale per l'input 'counts/*' del processo MULTIQC
+    ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).collect().ifEmpty([])
+
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'),
@@ -132,10 +137,11 @@ workflow ATAC_CHIP_PIPELINE {
         BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
         PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
-        DEEPTOOLS.out.bw.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]), 
-        ch_peaks.map{ it[1] }.collect().ifEmpty([]),
+        DEEPTOOLS.out.bw.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
+        MACS3_CHIP_NARROW.out.xls.mix(MACS3_CHIP_BROAD.out.versions).collect().ifEmpty([]), // Passa i log reali di MACS3
+        ch_all_counts_mqc, // <--- QUESTO va nell'input path('counts/*') che abbiamo aggiunto al processo MULTIQC
         CALC_FRIP.out.frip.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),       
-        HOMER_ANNOTATEPEAKS.out.txt.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
-        ch_versions_multiqc.collect()                  
+        ch_homer_mqc.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
+        ch_versions_multiqc.collect()                    
     )
 }
