@@ -124,9 +124,11 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // 12. MULTIQC
+    / 12. MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
-    ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).collect().ifEmpty([])
+    
+    // Uniamo i conteggi narrow e broad in un unico canale per i grafici custom
+    ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
@@ -136,11 +138,22 @@ workflow ATAC_CHIP_PIPELINE {
         BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
         PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
         SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
-        DEEPTOOLS.out.bw.map{ it instanceof List ? it[1] : it }.collect().ifEmpty([]),
+        
+        // --- FIX FINGERPRINT ---
+        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.collect().ifEmpty([]), 
+        
+        // --- LOG PEAK CALLING ---
         ch_macs_logs_mqc.collect().ifEmpty([]), 
+        
+        // --- GRAFICI CUSTOM (CONTEGGI) ---
         ch_all_counts_mqc,                      
+        
+        // --- FRiP ---
         CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]), 
+        
+        // --- HOMER ---
         ch_homer_mqc,
-        ch_versions_multiqc.collect()                    
+        
+        ch_versions_multiqc.collect()                                       
     )
 }
