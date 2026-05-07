@@ -1,6 +1,6 @@
 nextflow.enable.dsl=2
 
-// --- INCLUDE DEI MODULI (Invariati) ---
+// --- INCLUDE DEI MODULI ---
 include { FASTQC }                 from '../modules/local/fastqc.nf'
 include { TRIMGALORE }             from '../modules/local/trimgalore.nf'
 include { BOWTIE2_BUILD }          from '../modules/local/bowtie2_build.nf'
@@ -35,7 +35,6 @@ workflow ATAC_CHIP_PIPELINE {
     def blacklist_path = null
     def m_genome       = params.macs_gsize ?: params.genome
 
-    // Controlliamo se il genoma inserito esiste nel file nextflow.config
     if (params.genomes && params.genomes.containsKey(params.genome)) {
         def gdata      = params.genomes[params.genome]
         fasta_file     = params.fasta_file     ?: gdata.fasta
@@ -44,7 +43,6 @@ workflow ATAC_CHIP_PIPELINE {
         blacklist_path = params.blacklist      ?: gdata.blacklist
         if (!params.macs_gsize) m_genome = gdata.macs_gsize
     } else {
-        // Se non è nel config, deve averli passati l'utente via riga di comando
         fasta_file     = params.fasta_file
         gtf_file       = params.gtf_file
         bowtie2_index  = params.bowtie2_index
@@ -55,15 +53,12 @@ workflow ATAC_CHIP_PIPELINE {
     ch_index_internal = Channel.empty()
 
     if (bowtie2_index) {
-        // Se abbiamo l'indice (da config o comando), lo carichiamo
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
     } else if (fasta_file) {
-        // Se abbiamo solo il FASTA, costruiamo l'indice
         BOWTIE2_BUILD ( file(fasta_file) )
         ch_index_internal = BOWTIE2_BUILD.out.index.collect()
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     } else {
-        // Questo errore scatta solo se MANCANO ENTRAMBI
         error "ERRORE: Genoma '${params.genome}' non riconosciuto. Fornisci --fasta_file o --bowtie2_index."
     }
 
@@ -77,7 +72,6 @@ workflow ATAC_CHIP_PIPELINE {
 
     SAMTOOLS_SORT ( BOWTIE2.out.bam )
 
-    // Picard vuole il FASTA solo se vuoi fare validazioni specifiche, altrimenti può essere []
     def ch_fasta_ref = fasta_file ? file(fasta_file) : []
     PICARD_MARKDUPLICATES ( SAMTOOLS_SORT.out.bam, ch_fasta_ref, [] )
     ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions)
@@ -97,26 +91,36 @@ workflow ATAC_CHIP_PIPELINE {
     DEEPTOOLS ( ch_final_bams )
 
     ch_macs_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam ] }
+    
+    // INIZIALIZZAZIONE CANALI PER EVITARE "NO SUCH VARIABLE"
     ch_peaks = Channel.empty()
     ch_frip_peaks = Channel.empty()
     ch_macs_logs_mqc = Channel.empty()
+    ch_narrow_counts_mqc = Channel.empty()
+    ch_broad_counts_mqc  = Channel.empty()
 
     if (params.protocol == 'atac') {
         MACS3_ATAC_NARROW ( ch_macs_input )
         MACS3_ATAC_BROAD ( ch_macs_input )
+        
         ch_peaks = MACS3_ATAC_NARROW.out.peaks.mix(MACS3_ATAC_BROAD.out.peaks)
         ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks
+        ch_narrow_counts_mqc = MACS3_ATAC_NARROW.out.count_narrow
+        ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
         ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.versions.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.versions.map{ it[1] })
     } else {
         ch_macs_chip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam, [] ] }
         MACS3_CHIP_NARROW ( ch_macs_chip_input )
         MACS3_CHIP_BROAD ( ch_macs_chip_input )
+        
         ch_peaks = MACS3_CHIP_NARROW.out.peaks.mix(MACS3_CHIP_BROAD.out.peaks)
         ch_frip_peaks = MACS3_CHIP_NARROW.out.peaks
+        ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
+        ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-   // 9. ANNOTAZIONE E FRIP
+    // 9. ANNOTAZIONE E FRIP
     ch_frip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
@@ -129,8 +133,7 @@ workflow ATAC_CHIP_PIPELINE {
     // 10. MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
     
-    // Prepariamo i conteggi dei picchi (unendo narrow e broad se presenti)
-    // Se non hai ch_narrow_counts_mqc definito sopra, assicurati di averlo creato dopo MACS3
+    // Uniamo i conteggi dei picchi per il report
     ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
     MULTIQC (
@@ -139,13 +142,4 @@ workflow ATAC_CHIP_PIPELINE {
         FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),                            // 3
         TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),                        // 4
         BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),                           // 5
-        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),         // 6
-        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),                  // 7
-        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.collect().ifEmpty([]),             // 8
-        ch_macs_logs_mqc.collect().ifEmpty([]),                                       // 9
-        ch_all_counts_mqc,                                                            // 10 <--- IL MANCANTE
-        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),                        // 11
-        ch_homer_mqc,                                                                 // 12
-        ch_versions_multiqc.collect()                                                 // 13
-    )
-}
+        PICARD
