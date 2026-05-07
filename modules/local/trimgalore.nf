@@ -2,7 +2,9 @@ process TRIMGALORE {
     tag "${meta.id}"
     label 'process_high' 
 
-    container 'quay.io/biocontainers/trim-galore:0.6.10--hdfd78af_0'
+    container 'quay.io/biocontainers/trim-galore:0.6.11--hdfd78af_0'
+
+//'quay.io/biocontainers/trim-galore:0.6.10--hdfd78af_0'
 
     publishDir "${params.outdir}/02_trimmed", mode: 'copy'
 
