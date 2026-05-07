@@ -5,6 +5,7 @@
 # ATAC & ChIP-seq Analysis Pipeline
 
 **Nextflow DSL2 pipeline for automated analysis of ChIP-seq and ATAC-seq data.**
+
 [![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A525.10.3-23aa62.svg)](https://www.nextflow.io/)
 [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
 
