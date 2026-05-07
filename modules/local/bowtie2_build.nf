@@ -13,8 +13,8 @@ process BOWTIE2_BUILD {
 
     script:
     """
-    # Costruiamo l'indice direttamente nella cartella corrente
-    bowtie2-build --threads $task.cpus $fasta ${fasta.baseName}
+    # Usiamo un nome fisso 'genome_index' invece del baseName del file originale
+    bowtie2-build --threads $task.cpus $fasta genome_index
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
