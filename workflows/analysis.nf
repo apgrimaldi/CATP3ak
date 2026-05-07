@@ -34,7 +34,6 @@ workflow ATAC_CHIP_PIPELINE {
     def blacklist_path = null
     def m_genome       = params.macs_gsize ?: params.genome
 
-    // Verifichiamo se il genoma è presente nel config iGenomes
     if (params.genomes && params.genomes.containsKey(params.genome)) {
         def gdata = params.genomes[params.genome]
         fasta_file     = params.fasta_file    ?: gdata.fasta
@@ -43,23 +42,23 @@ workflow ATAC_CHIP_PIPELINE {
         blacklist_path = params.blacklist_file ?: gdata.blacklist
         if (!params.macs_gsize) m_genome = gdata.macs_gsize ?: params.genome
     } else {
-        // Genoma Custom: prende tutto da riga di comando
         fasta_file     = params.fasta_file
         gtf_file       = params.gtf_file
         bowtie2_index  = params.bowtie2_index
         blacklist_path = params.blacklist_file
     }
 
-    // --- GESTIONE INDICE BOWTIE2 ---
+    // --- GESTIONE INDICE BOWTIE2 (FIXED) ---
     ch_index_internal = Channel.empty()
 
     if (bowtie2_index) {
-        // Caso 1: L'indice esiste già (passato come path o dal config)
+        // Caso 1: L'indice esiste già (path o config)
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
     } else if (fasta_file) {
-        // Caso 2: Abbiamo il file .fna/.fa, dobbiamo costruire l'indice
+        // Caso 2: Abbiamo il file .fna/.fa, costruiamo l'indice
         BOWTIE2_BUILD ( file(fasta_file) )
-        ch_index_internal = BOWTIE2_BUILD.out.index
+        // Usiamo .collect() per assicurarci che tutti i file dell'indice vadano insieme
+        ch_index_internal = BOWTIE2_BUILD.out.index.collect()
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     } else {
         error "ERRORE: Impossibile trovare riferimenti per il genoma '${params.genome}'. Fornisci --fasta_file."
@@ -75,7 +74,7 @@ workflow ATAC_CHIP_PIPELINE {
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(TRIMGALORE.out.versions)
 
-    // 3. ALIGNMENT
+    // 3. ALIGNMENT (FIXED: Passa correttamente il canale dell'indice)
     BOWTIE2 ( TRIMGALORE.out.reads, ch_index_internal )
     ch_versions = ch_versions.mix(BOWTIE2.out.versions)
 
@@ -86,7 +85,6 @@ workflow ATAC_CHIP_PIPELINE {
     PICARD_MARKDUPLICATES ( SAMTOOLS_SORT.out.bam, [], [] )
     ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions)
     
-    // Normalizziamo il canale BAM/BAI per i passi successivi
     ch_picard_bams = PICARD_MARKDUPLICATES.out.bam.map { meta, bam, bai -> [ meta, bam, bai ?: [] ] }
 
     // 6. BLACKLIST FILTERING & INDEXING
