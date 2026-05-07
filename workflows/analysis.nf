@@ -21,89 +21,97 @@ include { SAMTOOLS_INDEX }         from '../modules/local/samtools_index.nf'
 
 workflow ATAC_CHIP_PIPELINE {
     take:
-    ch_input // Canale dagli samplesheet
+    ch_input 
 
     main:
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
-    // --- GESTIONE DINAMICA RISORSE GENOMA (FIXED) ---
-    // Verifichiamo se il genoma esiste nel config, altrimenti usiamo una mappa vuota
-    def genome_exists = params.genomes.containsKey(params.genome)
-    def genome_data   = genome_exists ? params.genomes[ params.genome ] : [:]
+    // --- LOGICA DI ASSEGNAZIONE PARAMETRI GENOMA ---
+    def fasta_file     = null
+    def gtf_file       = null
+    def bowtie2_index  = null
+    def blacklist_path = null
+    def m_genome       = params.macs_gsize ?: params.genome
 
-    def blacklist_path = params.blacklist_file ?: genome_data.blacklist ?: null
-    def fasta_file     = params.fasta_file     ?: genome_data.fasta     ?: null
-    def gtf_file       = params.gtf_file       ?: genome_data.gtf       ?: null
-    def bowtie2_index  = params.bowtie2_index  ?: genome_data.bowtie2  ?: null
-    
-    // Gestione macs_gsize: priorità comando > config > stringa genoma
-    def m_genome = params.macs_gsize ?: genome_data.macs_gsize ?: params.genome
+    // Verifichiamo se il genoma è presente nel config iGenomes
+    if (params.genomes && params.genomes.containsKey(params.genome)) {
+        def gdata = params.genomes[params.genome]
+        fasta_file     = params.fasta_file    ?: gdata.fasta
+        gtf_file       = params.gtf_file      ?: gdata.gtf
+        bowtie2_index  = params.bowtie2_index ?: gdata.bowtie2
+        blacklist_path = params.blacklist_file ?: gdata.blacklist
+        if (!params.macs_gsize) m_genome = gdata.macs_gsize ?: params.genome
+    } else {
+        // Genoma Custom: prende tutto da riga di comando
+        fasta_file     = params.fasta_file
+        gtf_file       = params.gtf_file
+        bowtie2_index  = params.bowtie2_index
+        blacklist_path = params.blacklist_file
+    }
 
-    // --- LOGICA INDICE BOWTIE2 (AUTOMATICA) ---
+    // --- GESTIONE INDICE BOWTIE2 ---
     ch_index_internal = Channel.empty()
+
     if (bowtie2_index) {
-        // Se l'indice esiste già (da config o comando)
+        // Caso 1: L'indice esiste già (passato come path o dal config)
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
     } else if (fasta_file) {
-        // Se abbiamo il .fna/.fasta, costruiamo l'indice
+        // Caso 2: Abbiamo il file .fna/.fa, dobbiamo costruire l'indice
         BOWTIE2_BUILD ( file(fasta_file) )
         ch_index_internal = BOWTIE2_BUILD.out.index
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     } else {
-        error "ERRORE: Devi fornire almeno --fasta_file per il genoma '${params.genome}'"
+        error "ERRORE: Impossibile trovare riferimenti per il genoma '${params.genome}'. Fornisci --fasta_file."
     }
 
-    // --- EXECUTION STEPS ---
+    // --- START PIPELINE ---
 
-    // 1. Qualità iniziale
+    // 1. FASTQC
     FASTQC ( ch_input )
     ch_versions = ch_versions.mix(FASTQC.out.versions)
 
-    // 2. Trimming
+    // 2. TRIMMING
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(TRIMGALORE.out.versions)
 
-    // 3. Allineamento (usa l'indice creato o fornito)
+    // 3. ALIGNMENT
     BOWTIE2 ( TRIMGALORE.out.reads, ch_index_internal )
     ch_versions = ch_versions.mix(BOWTIE2.out.versions)
 
-    // 4. Ordinamento BAM
+    // 4. SORTING
     SAMTOOLS_SORT ( BOWTIE2.out.bam )
 
-    // 5. Rimozione Duplicati
+    // 5. MARK DUPLICATES
     PICARD_MARKDUPLICATES ( SAMTOOLS_SORT.out.bam, [], [] )
     ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions)
     
-    // Normalizzazione canali per Picard (assicura tuple corrette)
+    // Normalizziamo il canale BAM/BAI per i passi successivi
     ch_picard_bams = PICARD_MARKDUPLICATES.out.bam.map { meta, bam, bai -> [ meta, bam, bai ?: [] ] }
 
-    // 6. Filtraggio Blacklist e Indicizzazione Finale
+    // 6. BLACKLIST FILTERING & INDEXING
     if (blacklist_path) {
         FILTERING ( ch_picard_bams, file(blacklist_path) )
         SAMTOOLS_INDEX ( FILTERING.out.bam )
         ch_final_bams = SAMTOOLS_INDEX.out.bam_bai
         ch_versions = ch_versions.mix(FILTERING.out.versions, SAMTOOLS_INDEX.out.versions)
     } else {
-        // Se non c'è blacklist, indicizziamo direttamente l'output di Picard
         SAMTOOLS_INDEX ( ch_picard_bams.map { it -> [it[0], it[1]] } )
         ch_final_bams = SAMTOOLS_INDEX.out.bam_bai
     }
 
-    // 7. Statistiche finali
+    // 7. STATS & DEEPTOOLS
     SAMTOOLS_STATS ( ch_final_bams.map { it -> [ it[0], it[1] ] } )
     ch_versions = ch_versions.mix(SAMTOOLS_STATS.out.versions)
-
-    // 8. Creazione BigWig
     DEEPTOOLS ( ch_final_bams )
     ch_versions = ch_versions.mix(DEEPTOOLS.out.versions)
 
-    // 9. Peak Calling (ATAC o ChIP)
+    // 8. PEAK CALLING
     ch_peaks = Channel.empty()
     ch_frip_peaks = Channel.empty()
+    ch_macs_logs_mqc = Channel.empty()
     ch_narrow_counts_mqc = Channel.empty()
     ch_broad_counts_mqc  = Channel.empty()
-    ch_macs_logs_mqc = Channel.empty()
 
     if (params.protocol == 'atac') {
         ch_macs_input = ch_final_bams.map { it -> [ it[0], it[1] ] }
@@ -128,18 +136,17 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-    // 10. Calcolo FRiP score
+    // 9. FRIP & ANNOTATION
     ch_frip_input = ch_final_bams.map { it -> [ it[0], it[1] ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
-    // 11. Annotazione dei picchi con HOMER
     ch_homer_mqc = Channel.empty()
     if (fasta_file && gtf_file) {
         HOMER_ANNOTATEPEAKS ( ch_peaks, file(fasta_file), file(gtf_file) )
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // 12. Generazione MultiQC Report
+    // 10. MULTIQC
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
     ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
