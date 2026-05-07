@@ -6,7 +6,7 @@ process BOWTIE2 {
 
     input:
     tuple val(meta), path(reads)
-    path index // Riceve la lista di file .bt2 (grazie al .collect() nel workflow)
+    path index // Riceve la lista di file .bt2 (passata con .collect() nel workflow)
 
     output:
     tuple val(meta), path("*.raw.bam"), emit: bam
@@ -24,13 +24,21 @@ process BOWTIE2 {
     def extra_args = params.protocol == 'atac' ? "--no-mixed --no-discordant" : ""
 
     """
-    # 1. Identifica il nome base dell'indice (cerca il file .1.bt2 nella directory corrente)
-    # Usiamo 'ls' invece di 'find' per semplicità, dato che i file sono linkati direttamente
-    INDEX_BASE=\$(ls *.1.bt2* | sed 's/\\.1\\.bt2.*//')
+    # 1. Identifica il nome base dell'indice in modo robusto
+    # Cerchiamo il file che finisce per .1.bt2 (o .1.bt2l per indici grandi) e rimuoviamo l'estensione
+    INDEX_BASE=\$(find -L . -name "*.1.bt2*" | sed 's/\\.1\\.bt2.*//' | head -n 1)
+
+    # Verifica di sicurezza: se INDEX_BASE è vuoto, il processo deve fallire subito con un messaggio utile
+    if [ -z "\$INDEX_BASE" ]; then
+        echo "ERRORE: Indice Bowtie2 non trovato. Assicurati che i file .bt2 siano presenti nella cartella."
+        ls -la
+        exit 1
+    fi
 
     # 2. Esecuzione Allineamento e conversione immediata in BAM
+    # Aggiungiamo -S per compatibilità e --no-unal per non salvare i reads non mappati (opzionale)
     bowtie2 \\
-        -x \$INDEX_BASE \\
+        -x "\$INDEX_BASE" \\
         $input_reads \\
         -p $task.cpus \\
         $rg_args \\
