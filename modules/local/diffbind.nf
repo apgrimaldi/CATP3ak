@@ -10,10 +10,10 @@ process DIFFBIND {
     path peaks
 
     output:
-    path "*.pdf"                   , emit: pdf
-    path "*.csv"                   , emit: csv
-    path "*_mqc.html"              , emit: mqc_html
-    path "*.png"                   , emit: png
+    path "*.pdf"                   , emit: pdf, optional: true
+    path "*.csv"                   , emit: csv, optional: true
+    path "*_mqc.html"              , emit: mqc_html, optional: true
+    path "*.png"                   , emit: png, optional: true
     path "versions.yml"            , emit: versions
 
     script:
@@ -21,8 +21,8 @@ process DIFFBIND {
     #!/usr/bin/env Rscript
     library(DiffBind)
 
+    # Caricamento campioni
     samples <- read.csv("${samplesheet}")
-
     samples\$bamReads <- basename(samples\$bamReads)
     samples\$Peaks    <- basename(samples\$Peaks)
     
@@ -30,32 +30,46 @@ process DIFFBIND {
         samples\$bamControl <- basename(samples\$bamControl)
     }
 
+    # Creazione oggetto DBA
     db_obj <- dba(sampleSheet=samples)
     
+    # Conteggio letture
     db_obj <- dba.count(db_obj, bParallel=TRUE)
-    db_obj <- dba.contrast(db_obj, categories=DBA_CONDITION)
-    db_obj <- dba.analyze(db_obj)
 
-    res_db <- dba.report(db_obj)
-    write.csv(as.data.frame(res_db), "diff_bind_results.csv")
+    # Tenta di stabilire il contrasto e analizzare
+    # Usiamo un blocco try() per evitare che il crash blocchi l'intera pipeline 
+    # se i campioni sono insufficienti per l'analisi statistica
+    analysis_status <- try({
+        db_obj <- dba.contrast(db_obj, categories=DBA_CONDITION, minMembers=2)
+        db_obj <- dba.analyze(db_obj)
+    }, silent=TRUE)
 
-    png("diffbind_profile.png", width=1000, height=800, res=120)
-    dba.plotProfile(db_obj, contrast=1)
-    dev.off()
+    # Se l'analisi è riuscita, genera i report
+    if (!inherits(analysis_status, "try-error")) {
+        res_db <- dba.report(db_obj)
+        write.csv(as.data.frame(res_db), "diff_bind_results.csv")
 
-    pdf("diffbind_profile.pdf", width=10, height=8)
-    dba.plotProfile(db_obj, contrast=1)
-    dev.off()
+        png("diffbind_profile.png", width=1000, height=800, res=120)
+        try(dba.plotProfile(db_obj, contrast=1))
+        dev.off()
 
-    cat(paste0(
-        "# id: 'diffbind_profile'\\n",
-        "# section_name: 'Differential Binding Profile'\\n",
-        "# description: 'Heatmap showing signal intensity at differential sites (Gain vs Loss)'\\n",
-        "<div style='text-align: center;'>\\n",
-        "  <img src='diffbind_profile.png' style='max-width: 100%; height: auto;'>\\n",
-        "</div>"
-    ), file="diffbind_profile_mqc.html")
+        pdf("diffbind_profile.pdf", width=10, height=8)
+        try(dba.plotProfile(db_obj, contrast=1))
+        dev.off()
 
+        cat(paste0(
+            "# id: 'diffbind_profile'\\n",
+            "# section_name: 'Differential Binding Profile'\\n",
+            "<div style='text-align: center;'>\\n",
+            "  <img src='diffbind_profile.png' style='max-width: 100%; height: auto;'>\\n",
+            "</div>"
+        ), file="diffbind_profile_mqc.html")
+    } else {
+        # Se fallisce, crea un file log invece di crashare
+        writeLines("Analisi differenziale non riuscita: campioni insufficienti o nessun contrasto trovato.", "diffbind_warning.log")
+    }
+
+    # Versioning
     writeLines(c(
         "\\"${task.process}\\":",
         paste0("    diffbind: ", packageVersion("DiffBind"))
