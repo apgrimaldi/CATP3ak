@@ -87,8 +87,19 @@ workflow ATAC_CHIP_PIPELINE {
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
     DEEPTOOLS ( ch_final_bams )
 
-    ch_macs_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam ] }
-    
+    // --- LOGICA DI ACCOPPIAMENTO IP-CONTROLLO ---
+    ch_bams_branched = ch_final_bams
+        .branch { meta, bam, bai ->
+            control: meta.is_control == true
+            ip:      true
+        }
+
+    // Creazione del canale accoppiato [meta, ip_bam, control_bam]
+    ch_macs_input = ch_bams_branched.ip
+        .map { meta, bam, bai -> [ meta.control, meta, bam ] }
+        .combine(ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }, by: 0)
+        .map { control_id, meta, ip_bam, control_bam -> [ meta, ip_bam, control_bam ] }
+
     ch_peaks = Channel.empty()
     ch_frip_peaks = Channel.empty()
     ch_macs_logs_mqc = Channel.empty()
@@ -96,17 +107,16 @@ workflow ATAC_CHIP_PIPELINE {
     ch_broad_counts_mqc  = Channel.empty()
 
     if (params.protocol == 'atac') {
-        MACS3_ATAC_NARROW ( ch_macs_input, m_genome )
-        MACS3_ATAC_BROAD ( ch_macs_input, m_genome )
+        MACS3_ATAC_NARROW ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
+        MACS3_ATAC_BROAD ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
         ch_peaks = MACS3_ATAC_NARROW.out.peaks.mix(MACS3_ATAC_BROAD.out.peaks)
         ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks
         ch_narrow_counts_mqc = MACS3_ATAC_NARROW.out.count_narrow
         ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
         ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.versions.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.versions.map{ it[1] })
     } else {
-        ch_macs_chip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam, [] ] }
-        MACS3_CHIP_NARROW ( ch_macs_chip_input, m_genome )
-        MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
+        MACS3_CHIP_NARROW ( ch_macs_input, m_genome )
+        MACS3_CHIP_BROAD ( ch_macs_input, m_genome )
         ch_peaks = MACS3_CHIP_NARROW.out.peaks.mix(MACS3_CHIP_BROAD.out.peaks)
         ch_frip_peaks = MACS3_CHIP_NARROW.out.peaks
         ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
@@ -114,7 +124,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-    ch_frip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam ] }.join(ch_frip_peaks)
+    ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
     ch_homer_mqc = Channel.empty()
@@ -124,7 +134,7 @@ workflow ATAC_CHIP_PIPELINE {
     }
 
     ch_diffbind_mqc = Channel.empty()
-    ch_diffbind_prep = ch_final_bams
+    ch_diffbind_prep = ch_bams_branched.ip
         .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
         .join( ch_frip_peaks.map { meta, peak -> [ meta.id, peak ] } )
         .map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
