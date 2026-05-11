@@ -1,6 +1,5 @@
 nextflow.enable.dsl=2
 
-// --- INCLUDE DEI MODULI ---
 include { FASTQC }                  from '../modules/local/fastqc.nf'
 include { TRIMGALORE }              from '../modules/local/trimgalore.nf'
 include { BOWTIE2_BUILD }           from '../modules/local/bowtie2_build.nf'
@@ -29,7 +28,6 @@ workflow ATAC_CHIP_PIPELINE {
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
-    // --- 1. LOGICA GENOMA ---
     def fasta_file     = null
     def gtf_file        = null
     def bowtie2_index  = null
@@ -55,7 +53,6 @@ workflow ATAC_CHIP_PIPELINE {
         log.warn "MACS3: Genome size non valida. Impostato default: ${m_genome}"
     }
 
-    // --- 2. INDICE BOWTIE2 ---
     ch_index_internal = Channel.empty() 
     if (bowtie2_index) {
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
@@ -65,7 +62,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     }
 
-    // --- 3. CORE PROCESSING ---
     FASTQC ( ch_input )
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(FASTQC.out.versions, TRIMGALORE.out.versions)
@@ -89,7 +85,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_final_bams = SAMTOOLS_INDEX.out.bam_bai
     }
 
-    // --- 4. METRICHE & PEAKS ---
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
     DEEPTOOLS ( ch_final_bams )
 
@@ -120,7 +115,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-    // --- 5. ANNOTAZIONE E FRIP ---
     ch_frip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
@@ -130,18 +124,15 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // --- 6. DIFFBIND (GENERAZIONE AUTOMATICA E ANALISI) ---
     ch_diffbind_mqc = Channel.empty()
     
-    // Uniamo BAM e Peaks filtrando per il protocollo (usiamo Narrow per l'analisi differenziale)
     ch_diffbind_prep = ch_final_bams
         .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
         .join( ch_frip_peaks.map { meta, peak -> [ meta.id, peak ] } )
         .map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
 
-    // Creiamo la samplesheet temporanea
     ch_db_samplesheet = ch_diffbind_prep
-        .map { meta, bam, peak -> 
+        .map { meta, bam, bai, peak -> 
             "${meta.id},${meta.condition},${meta.replicate},${bam.name},${peak.name},narrow" 
         }
         .collectFile(name: 'samplesheet_diffbind.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
@@ -155,7 +146,6 @@ workflow ATAC_CHIP_PIPELINE {
     ch_diffbind_mqc = DIFFBIND.out.mqc_html.collect().ifEmpty([])
     ch_versions = ch_versions.mix(DIFFBIND.out.versions)
 
-    // --- 7. MULTIQC ---
     ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
     ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
