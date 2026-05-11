@@ -33,7 +33,9 @@ workflow ATAC_CHIP_PIPELINE {
     def gtf_file       = null
     def bowtie2_index  = null
     def blacklist_path = null
-    def m_genome       = params.macs_gsize ?: params.genome
+    
+    // Priorità 1: Valore passato da riga di comando
+    def m_genome = params.macs_gsize 
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
         def gdata      = params.genomes[params.genome]
@@ -41,12 +43,20 @@ workflow ATAC_CHIP_PIPELINE {
         gtf_file       = params.gtf_file       ?: gdata.gtf
         bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
-        if (!params.macs_gsize) m_genome = gdata.macs_gsize
+        
+        // Priorità 2: Se non specificato da comando, prendi dal config
+        if (!m_genome) m_genome = gdata.macs_gsize
     } else {
         fasta_file     = params.fasta_file
         gtf_file       = params.gtf_file
         bowtie2_index  = params.bowtie2_index
         blacklist_path = params.blacklist
+    }
+
+    // Priorità 3: Fallback se m_genome è ancora nullo o impostato come 'custom'
+    if (!m_genome || m_genome == 'custom') {
+        m_genome = 'hs'
+        log.warn "MACS3: Genome size non valida o non trovata. Impostato default: ${m_genome}"
     }
 
     // --- 2. GESTIONE INDICE BOWTIE2 ---
@@ -101,8 +111,8 @@ workflow ATAC_CHIP_PIPELINE {
     ch_broad_counts_mqc  = Channel.empty()
 
     if (params.protocol == 'atac') {
-        MACS3_ATAC_NARROW ( ch_macs_input )
-        MACS3_ATAC_BROAD ( ch_macs_input )
+        MACS3_ATAC_NARROW ( ch_macs_input, m_genome )
+        MACS3_ATAC_BROAD ( ch_macs_input, m_genome )
         
         ch_peaks = MACS3_ATAC_NARROW.out.peaks.mix(MACS3_ATAC_BROAD.out.peaks)
         ch_frip_peaks = MACS3_ATAC_NARROW.out.peaks
@@ -111,8 +121,8 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.versions.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.versions.map{ it[1] })
     } else {
         ch_macs_chip_input = ch_final_bams.map { meta, bam, bai -> [ meta, bam, [] ] }
-        MACS3_CHIP_NARROW ( ch_macs_chip_input )
-        MACS3_CHIP_BROAD ( ch_macs_chip_input )
+        MACS3_CHIP_NARROW ( ch_macs_chip_input, m_genome )
+        MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
         
         ch_peaks = MACS3_CHIP_NARROW.out.peaks.mix(MACS3_CHIP_BROAD.out.peaks)
         ch_frip_peaks = MACS3_CHIP_NARROW.out.peaks
@@ -136,18 +146,18 @@ workflow ATAC_CHIP_PIPELINE {
     ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
 
     MULTIQC (
-        ch_multiqc_config.collect().ifEmpty([]),                                      // 1
-        Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'), // 2
-        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),                            // 3
-        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),                        // 4
-        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),                           // 5
-        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),         // 6
-        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),                  // 7
-        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.collect().ifEmpty([]),             // 8
-        ch_macs_logs_mqc.collect().ifEmpty([]),                                       // 9
-        ch_all_counts_mqc,                                                            // 10
-        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),                        // 11
-        ch_homer_mqc,                                                                 // 12
-        ch_versions_multiqc.collect()                                                 // 13
+        ch_multiqc_config.collect().ifEmpty([]),                                      
+        Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'), 
+        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),                            
+        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),                        
+        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),                           
+        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),         
+        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),                  
+        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.collect().ifEmpty([]),             
+        ch_macs_logs_mqc.collect().ifEmpty([]),                                       
+        ch_all_counts_mqc,                                                            
+        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),                        
+        ch_homer_mqc,                                                                 
+        ch_versions_multiqc.collect()                                                 
     )
 }
