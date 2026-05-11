@@ -5,8 +5,8 @@ process MULTIQC {
     publishDir "${params.outdir}/00_MultiQC_Report", mode: 'copy'
 
     input:
-    path multiqc_config      // File YAML di configurazione assets/multiqc_config.yml
-    path workflow_summary    // File summary.txt
+    path multiqc_config      l
+    path workflow_summary    
     path ('fastqc/*')
     path ('trimgalore/*')
     path ('alignment/*')
@@ -17,7 +17,7 @@ process MULTIQC {
     path ('counts/*')        
     path ('frip/*')
     path ('homer/*')
-    path ('diffbind/*')      // NUOVO: Input per i file HTML/PNG di DiffBind
+    path ('diffbind/*')      
     path versions
 
     output:
@@ -27,10 +27,9 @@ process MULTIQC {
 
     script:
     def args = task.ext.args ?: ''
-    // Forza l'uso del config se presente, altrimenti usa i default
+
     def config_opt = multiqc_config && multiqc_config.name != 'empty_config' ? "--config $multiqc_config" : ''
     
-    // Titolo personalizzato per verificare il caricamento del config
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
 
     """
