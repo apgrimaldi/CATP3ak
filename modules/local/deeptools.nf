@@ -7,26 +7,40 @@ process DEEPTOOLS {
 
     input:
     tuple val(meta), path(bam), path(bai)
-    // Rimuoviamo l'obbligo del file BED qui se non lo usiamo
 
     output:
-    tuple val(meta), path("*.bigWig")       , emit: bw
-    tuple val(meta), path("*.fingerprint.pdf") , emit: fingerprint_pdf
-    tuple val(meta), path("*.fingerprint.txt") , emit: fingerprint_txt 
-    path "versions.yml"                     , emit: versions
+    tuple val(meta), path("*.bigWig")                           , emit: bw
+    tuple val(meta), path("*.plotFingerprint.pdf")              , emit: fingerprint_pdf
+    tuple val(meta), path("*.plotFingerprint.raw.txt")          , emit: fingerprint_txt 
+    tuple val(meta), path("*.plotFingerprint.qcmetrics.txt")    , emit: fingerprint_metrics
+    path "versions.yml"                                         , emit: versions
 
     script:
     def prefix = "${meta.id}"
+    // Gestione reads single-end come fa nf-core
+    def extend = (meta.single_end && params.fragment_size > 0) ? "--extendReads ${params.fragment_size}" : ''
     """
     # 1. Genera BigWig
-    bamCoverage -b $bam -o ${prefix}.bigWig --binSize 10 --normalizeUsing CPM --numberOfProcessors $task.cpus
+    bamCoverage \\
+        -b $bam \\
+        -o ${prefix}.bigWig \\
+        --binSize 10 \\
+        --normalizeUsing CPM \\
+        --numberOfProcessors $task.cpus
 
-    # 2. Fingerprint
-    plotFingerprint -b $bam --plotFile ${prefix}.fingerprint.pdf --outRawCounts ${prefix}.fingerprint.txt --numberOfProcessors $task.cpus --skipZeros
+    # 2. Fingerprint (Parametri nf-core)
+    plotFingerprint \\
+        --bamfiles $bam \\
+        --plotFile ${prefix}.plotFingerprint.pdf \\
+        --outRawCounts ${prefix}.plotFingerprint.raw.txt \\
+        --outQualityMetrics ${prefix}.plotFingerprint.qcmetrics.txt \\
+        --numberOfProcessors $task.cpus \\
+        $extend \\
+        --skipZeros
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        deeptools: \$(deeptools --version | cut -d' ' -f2)
+        deeptools: \$(plotFingerprint --version | sed -e "s/plotFingerprint //g")
     END_VERSIONS
     """
 }
