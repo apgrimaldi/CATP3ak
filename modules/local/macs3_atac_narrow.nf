@@ -5,12 +5,12 @@ process MACS3_ATAC_NARROW {
 
     input:
     tuple val(meta), path(bam)
-    val gsize // Riceve il valore corretto (hs, mm, 2.7e9, ecc.) dal workflow
+    val gsize
 
     output:
-    tuple val(meta), path("*.narrowPeak"), emit: peaks
-    tuple val(meta), path("*.narrow_counts.txt"), emit: count_narrow 
-    path "versions.yml"                  , emit: versions
+    tuple val(meta), path("*.narrowPeak")       , emit: peaks
+    tuple val(meta), path("*.narrow_counts.txt"), emit: count_narrow
+    path "versions.yml"                         , emit: versions
 
     script:
     def prefix   = "${meta.id}_atac_narrow"
@@ -25,14 +25,13 @@ process MACS3_ATAC_NARROW {
         --nomodel --shift -100 --extsize 200 \\
         --qvalue 0.05
 
-    # Controllo esistenza e conteggio righe del file narrowPeak
-    if [ -f ${prefix}_peaks.narrowPeak ]; then
-        count=\$(wc -l < ${prefix}_peaks.narrowPeak)
+    PEAK_FILE=\$(ls *.narrowPeak)
+    if [ -f "\$PEAK_FILE" ]; then
+        count=\$(wc -l < "\$PEAK_FILE")
     else
         count=0
     fi
 
-    # Generazione file per MultiQC con Header e nome file univoco
     echo -e "Sample\\tNarrow_Peaks" > ${prefix}.narrow_counts.txt
     echo -e "${meta.id}\\t\$count" >> ${prefix}.narrow_counts.txt
 
