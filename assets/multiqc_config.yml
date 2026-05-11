@@ -11,8 +11,7 @@ module_order:
   - custom_content # I tuoi grafici (Homer, DiffBind, MACS3) sono qui
   - deeptools
 
-# --- 2. ORDINE VISIVO DELLE SEZIONI (LA CATENA) ---
-# Usiamo numeri negativi distanziati per evitare sovrapposizioni
+
 report_section_order:
   fastqc:
     order: -1000
