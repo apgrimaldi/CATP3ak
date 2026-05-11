@@ -9,37 +9,36 @@ process DIFFBIND {
     path bais
     path peaks
 
+    output:
+    path "*.pdf"                   , emit: pdf
+    path "*.csv"                   , emit: csv
+    path "*_mqc.html"              , emit: mqc_html
+    path "*.png"                   , emit: png
+    path "versions.yml"            , emit: versions
+
     script:
     """
     #!/usr/bin/env Rscript
     library(DiffBind)
 
-    # Leggiamo la samplesheet
     samples <- read.csv("${samplesheet}")
 
-    # TRUCCO: Forziamo DiffBind a cercare i file nella cartella di lavoro corrente
-    # Nextflow ha messo tutti i file (bam e peaks) qui dentro.
     samples\$bamReads <- basename(samples\$bamReads)
     samples\$Peaks    <- basename(samples\$Peaks)
     
-    # Se hai dei BAM di controllo (input):
     if ("ControlID" %in% colnames(samples)) {
         samples\$bamControl <- basename(samples\$bamControl)
     }
 
-    # Creiamo l'oggetto DBA usando la tabella modificata "al volo"
     db_obj <- dba(sampleSheet=samples)
     
-    # Proseguiamo con l'analisi
     db_obj <- dba.count(db_obj, bParallel=TRUE)
     db_obj <- dba.contrast(db_obj, categories=DBA_CONDITION)
     db_obj <- dba.analyze(db_obj)
 
- 
     res_db <- dba.report(db_obj)
     write.csv(as.data.frame(res_db), "diff_bind_results.csv")
 
-    
     png("diffbind_profile.png", width=1000, height=800, res=120)
     dba.plotProfile(db_obj, contrast=1)
     dev.off()
