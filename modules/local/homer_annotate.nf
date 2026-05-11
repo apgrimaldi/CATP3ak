@@ -38,8 +38,8 @@ process HOMER_ANNOTATEPEAKS {
         > ${prefix}.annotatePeaks.txt
 
     # 3. Generazione Statistiche per MultiQC (Custom Content)
-    echo "# id: 'homer_annotations'" > ${prefix}.homer_stats_mqc.txt
-    echo "# section_name: 'HOMER Peak Annotation'" >> ${prefix}.homer_stats_mqc.txt
+    echo "# id: 'homer_annotations_${type}'" > ${prefix}.homer_stats_mqc.txt
+    echo "# section_name: 'HOMER Peak Annotation (${type.capitalize()})'" >> ${prefix}.homer_stats_mqc.txt
     echo "# format: 'tsv'" >> ${prefix}.homer_stats_mqc.txt
     echo "# plot_type: 'bargraph'" >> ${prefix}.homer_stats_mqc.txt
     echo "# pconfig:" >> ${prefix}.homer_stats_mqc.txt
