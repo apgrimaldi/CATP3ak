@@ -20,11 +20,17 @@ process CALC_FRIP {
     READS_IN_PEAKS=\$(samtools view -u $bam | bedtools intersect -a stdin -b $peak -u -bed | wc -l)
 
     # 3. Calcolo finale senza header per il bargraph MultiQC
+    echo "# id: 'frip_score'" > ${prefix}.FRiP.txt
+    echo "# section_name: 'FRiP Score'" >> ${prefix}.FRiP.txt
+    echo "# format: 'tsv'" >> ${prefix}.FRiP.txt
+    echo "# plot_type: 'bargraph'" >> ${prefix}.FRiP.txt
+    echo -e "Sample\\tFRiP" >> ${prefix}.FRiP.txt
+
     awk -v rip="\$READS_IN_PEAKS" -v total="\$TOTAL_MAPPED" -v samp="${prefix}" \\
         'BEGIN {
             OFS="\\t"; 
             if (total > 0) print samp, rip/total; else print samp, "0"
-        }' > ${prefix}.FRiP.txt
+        }' >> ${prefix}.FRiP.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
