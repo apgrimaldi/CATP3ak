@@ -131,13 +131,10 @@ workflow ATAC_CHIP_PIPELINE {
 
     ch_homer_mqc = Channel.empty()
     if (!params.skip_homer && fasta_file && gtf_file) {
-        
-        // Uniamo narrow e broad e applichiamo il filtro salvavita
         ch_homer_input = ch_narrow_peaks.mix(ch_broad_peaks)
-            .filter { meta, peak return peak != null && peak.exists() && peak.size() > 0 }
+            .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         
         HOMER_ANNOTATEPEAKS ( ch_homer_input, file(fasta_file), file(gtf_file) )
-        
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
