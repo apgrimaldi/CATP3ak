@@ -28,7 +28,7 @@ workflow ATAC_CHIP_PIPELINE {
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
-    def fasta_file     = null
+    def reference_file     = null
     def gtf_file       = null
     def bowtie2_index  = null
     def blacklist_path = null
@@ -36,13 +36,13 @@ workflow ATAC_CHIP_PIPELINE {
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
         def gdata      = params.genomes[params.genome]
-        fasta_file      = params.fasta_file      ?: gdata.fasta
+        reference_file      = params.reference_file      ?: gdata.fasta
         gtf_file        = params.gtf_file        ?: gdata.gtf
         bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
-        fasta_file      = params.fasta_file
+        reference_file      = params.reference_file
         gtf_file        = params.gtf_file
         bowtie2_index  = params.bowtie2_index
         blacklist_path = params.blacklist
