@@ -10,6 +10,10 @@ run_modules:
   - deeptools
   - custom_content
 
+# Esclude il modulo MACS2 che viene rilevato erroneamente dai file .xls
+fn_ignore_files:
+  - "*_peaks.xls"
+
 module_order:
   - fastqc
   - cutadapt
@@ -53,7 +57,7 @@ custom_data:
     parent_id: "custom_content"
     description: "Software versions used in the pipeline"
   diffbind_profile:
-    parent_id: "diffbind"
+    parent_id: "custom_content"
     section_name: "DiffBind: Differential Binding Profile"
   macs3_narrow_count:
     section_name: "MACS3: Narrow Peak Count"
