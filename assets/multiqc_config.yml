@@ -27,27 +27,27 @@ report_section_order:
   fastqc:
     order: -100
   cutadapt:
-    order: -90
+    order: -200
   bowtie2:
-    order: -80
+    order: -300
   samtools:
-    order: -70
+    order: -400
   picard:
-    order: -60
+    order: -500
   macs3_narrow_count:
-    order: -50
+    order: -600
   macs3_broad_count:
-    order: -40
+    order: -700
   diffbind_profile:
-    order: -35
+    order: -800
   frip_score:
-    order: -30
+    order: -900
   homer_annotations:
-    order: -25
+    order: -1000
   deeptools:
-    order: -20
+    order: -1100
   software_versions:
-    order: -10
+    order: -1200
 
 custom_data:
   diffbind_profile:
