@@ -22,7 +22,7 @@ include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtoo
 
 workflow ATAC_CHIP_PIPELINE {
     take:
-    ch_input 
+    ch_input
 
     main:
     ch_versions = Channel.empty()
@@ -159,7 +159,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
-  ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}")
+    ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}")
         .collectFile(name: 'summary.txt')
         .collect()
 
@@ -175,13 +175,9 @@ workflow ATAC_CHIP_PIPELINE {
     ch_picard_mqc   = PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([])
     ch_stats_mqc    = SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([])
     ch_frip_mqc     = CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([])
-    
     ch_macs_mqc     = ch_macs_logs_mqc.collect().ifEmpty([])
     
-    ch_counts_mqc   = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc)
-        .map{ it[1] }
-        .collect()
-        .ifEmpty([])
+    ch_counts_mqc   = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
     
     ch_deeptools_mqc = DEEPTOOLS.out.fingerprint_txt.map{ it[1] }
         .mix(DEEPTOOLS.out.fingerprint_metrics.map{ it[1] })
@@ -194,4 +190,17 @@ workflow ATAC_CHIP_PIPELINE {
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         ch_summary_mqc,
-        ch_fastqc
+        ch_fastqc_mqc,
+        ch_trim_mqc,
+        ch_bowtie_mqc,
+        ch_picard_mqc,
+        ch_stats_mqc,
+        ch_deeptools_mqc,
+        ch_macs_mqc,
+        ch_counts_mqc,
+        ch_frip_mqc,
+        ch_homer_final,
+        ch_diffbind_final,
+        ch_versions_mqc
+    )
+}
