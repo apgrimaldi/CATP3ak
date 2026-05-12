@@ -94,7 +94,7 @@ workflow ATAC_CHIP_PIPELINE {
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
     DEEPTOOLS ( ch_final_bams )
 
-    // --- PEAK CALLING PREPARATION (Matching IP/Control) ---
+    // --- PEAK CALLING PREPARATION (IP/Control Branching) ---
     ch_bams_branched = ch_final_bams
         .branch { meta, bam, bai ->
             control: meta.is_control == true
@@ -102,10 +102,8 @@ workflow ATAC_CHIP_PIPELINE {
         }
 
     if (params.protocol == 'atac') {
-        // ATAC non usa controlli: passiamo una lista vuota come placeholder per il terzo elemento
         ch_macs_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
     } else {
-        // ChIP usa la logica di matching tramite l'ID definito in meta.control
         ch_macs_input = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.control, meta, bam ] }
             .combine(ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }, by: 0)
@@ -143,10 +141,12 @@ workflow ATAC_CHIP_PIPELINE {
     ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }.join(ch_frip_peaks)
     CALC_FRIP ( ch_frip_input )
 
-    // --- ANNOTATION (HOMER) ---
+    // --- ANNOTATION (HOMER) con protezione crash ---
     ch_homer_mqc = Channel.empty()
     if (!params.skip_homer && fasta_file && gtf_file) {
-        HOMER_ANNOTATEPEAKS ( ch_frip_peaks, file(fasta_file), file(gtf_file) )
+        // Filtriamo per evitare di passare file nulli a HOMER se MACS3 fallisce su un campione
+        ch_homer_input = ch_frip_peaks.filter { it[1] != null }
+        HOMER_ANNOTATEPEAKS ( ch_homer_input, file(fasta_file), file(gtf_file) )
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
