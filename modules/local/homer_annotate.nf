@@ -14,9 +14,12 @@ process HOMER_ANNOTATEPEAKS {
     path  "versions.yml"                         , emit: versions
 
     script:
+    script:
     def args = task.ext.args ?: ''
-    def peak_name = peak ? peak.getName() : "unknown"
+    
+    def peak_name = (peak != null && peak.name != null) ? peak.name : "unknown"
     def type = peak_name.contains('narrow') ? 'narrow' : 'broad'
+    
     def prefix = "${meta.id}.${type}"
     def VERSION = '4.11' 
     """
