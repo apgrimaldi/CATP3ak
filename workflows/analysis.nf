@@ -159,23 +159,32 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
-    ch_versions_multiqc = ch_versions.unique().collectFile(name: 'collated_versions.yml')
-    ch_all_counts_mqc = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
+    ch_versions_multiqc = ch_versions
+        .unique()
+        .collectFile(name: 'collated_versions.yml')
+        .collect()
+        .ifEmpty([])
+
+    ch_all_counts_mqc = ch_narrow_counts_mqc
+        .mix(ch_broad_counts_mqc)
+        .map{ it[1] }
+        .collect()
+        .ifEmpty([])
 
     MULTIQC (
-        ch_multiqc_config.collect().ifEmpty([]),                                      
+        ch_multiqc_config.collect().ifEmpty([]),                                       
         Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt'), 
-        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),                            
-        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),                        
-        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),                           
-        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),         
-        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),                  
+        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),                             
+        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),                         
+        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),                            
+        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),          
+        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),                   
         DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.mix(DEEPTOOLS.out.fingerprint_metrics.map{ it[1] }).collect().ifEmpty([]),
-        ch_macs_logs_mqc.collect().ifEmpty([]),                                       
-        ch_all_counts_mqc,                                                            
-        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),                        
+        ch_macs_logs_mqc.collect().ifEmpty([]),                                        
+        ch_all_counts_mqc,                                                             
+        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),                         
         ch_homer_mqc,                                                                 
-        ch_diffbind_mqc,                                                              
-        ch_versions_multiqc.collect()                                                 
+        ch_diffbind_mqc,                                                               
+        ch_versions_multiqc                                                  
     )
 }
