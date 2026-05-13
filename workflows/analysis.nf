@@ -150,7 +150,12 @@ workflow ATAC_CHIP_PIPELINE {
             ch_narrow_peaks.map{ it[1] }.collect() 
         )
         
-        ch_diffbind_mqc = DIFFBIND.out.mqc_html.collect().ifEmpty([])
+        // RACCOLTA CORRETTA: Mescola HTML e TXT
+        ch_diffbind_mqc = DIFFBIND.out.mqc_html
+            .mix(DIFFBIND.out.mqc_txt)
+            .collect()
+            .ifEmpty([])
+
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
