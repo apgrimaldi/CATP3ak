@@ -16,21 +16,23 @@ process DIFFBIND {
     path "versions.yml"                , emit: versions
 
     script:
-    """
+    // Usiamo shell invece di script per gestire meglio i caratteri speciali di Bash
+    shell:
+    '''
     #!/usr/bin/env Rscript
     library(DiffBind)
 
-    samples <- read.csv("${samplesheet}")
-    samples\$bamReads <- basename(as.character(samples\$bamReads))
-    samples\$Peaks    <- basename(as.character(samples\$Peaks))
+    samples <- read.csv("!{samplesheet}")
+    samples$bamReads <- basename(as.character(samples$bamReads))
+    samples$Peaks    <- basename(as.character(samples$Peaks))
     if ("bamControl" %in% colnames(samples)) {
-        samples\$bamControl <- basename(as.character(samples\$bamControl))
+        samples$bamControl <- basename(as.character(samples$bamControl))
     }
 
     db_obj <- dba(sampleSheet=samples)
     
     sample_info <- dba.show(db_obj)
-    keep_mask <- as.numeric(sample_info\$Intervals) > 0
+    keep_mask <- as.numeric(sample_info$Intervals) > 0
     
     if(sum(keep_mask) < length(keep_mask)) {
         db_obj <- dba(db_obj, mask=keep_mask)
@@ -54,18 +56,19 @@ process DIFFBIND {
     try(dba.plotProfile(db_obj, bUseSampleSheet=TRUE))
     dev.off()
 
+    # Passiamo a Bash per generare gli HTML
     system("
         if [ -f diffbind_correlation.png ]; then
-            IMG_CORR=\\$(base64 -w 0 diffbind_correlation.png)
-            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'\\\$IMG_CORR'\" style=\"max-width:100%;\"></div>' > diffbind_corr_mqc.html
+            IMG_CORR=$(base64 -w 0 diffbind_correlation.png)
+            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'$IMG_CORR'\" style=\"max-width:100%;\"></div>' > diffbind_corr_mqc.html
         fi
 
         if [ -f diffbind_profile.png ]; then
-            IMG_PROF=\\$(base64 -w 0 diffbind_profile.png)
-            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'\\\$IMG_PROF'\" style=\"max-width:100%;\"></div>' > diffbind_profile_mqc.html
+            IMG_PROF=$(base64 -w 0 diffbind_profile.png)
+            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'$IMG_PROF'\" style=\"max-width:100%;\"></div>' > diffbind_profile_mqc.html
         fi
     ")
 
-    writeLines(c(paste0("\\"${task.process}\\":"), paste0("    diffbind: ", packageVersion("DiffBind"))), "versions.yml")
-    """
+    writeLines(c(paste0("\\"!{task.process}\\":"), paste0("    diffbind: ", packageVersion("DiffBind"))), "versions.yml")
+    '''
 }
