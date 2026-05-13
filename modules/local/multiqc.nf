@@ -18,7 +18,8 @@ process MULTIQC {
     path ('frip/*')
     path ('homer/*')
     path ('diffbind/*')      
-    path ('profileplyr/*')    // <--- Aggiunto per ricevere i risultati di profileplyr
+    path ('profileplyr/*')    
+    path ('lanceotron/*') 
     path versions
 
     output:
