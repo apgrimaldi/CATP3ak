@@ -11,31 +11,26 @@ process DIFFBIND {
 
     output:
     path "*.pdf"                       , emit: pdf, optional: true
-    path "*.png"                       , emit: png, optional: true
+    path "*.csv"                       , emit: csv, optional: true
     path "*_mqc.html"                  , emit: mqc_html, optional: true
+    path "diffbind_correlation_mqc.txt", emit: mqc_txt, optional: true
+    path "*.png"                       , emit: png, optional: true
     path "versions.yml"                , emit: versions
 
     script:
-    shell:
-    '''
+    """
     #!/usr/bin/env Rscript
     library(DiffBind)
 
-    samples <- read.csv("!{samplesheet}")
-    samples$bamReads <- basename(as.character(samples$bamReads))
-    samples$Peaks    <- basename(as.character(samples$Peaks))
+    samples <- read.csv("${samplesheet}")
+    samples\$bamReads <- basename(as.character(samples\$bamReads))
+    samples\$Peaks    <- basename(as.character(samples\$Peaks))
     if ("bamControl" %in% colnames(samples)) {
-        samples$bamControl <- basename(as.character(samples$bamControl))
+        samples\$bamControl <- basename(as.character(samples\$bamControl))
     }
 
     db_obj <- dba(sampleSheet=samples)
     
-    sample_info <- dba.show(db_obj)
-    keep_mask <- as.numeric(sample_info$Intervals) > 0
-    if(sum(keep_mask) < length(keep_mask)) {
-        db_obj <- dba(db_obj, mask=keep_mask)
-    }
-
     pdf("diffbind_correlation.pdf")
     plot(db_obj)
     dev.off()
@@ -44,32 +39,42 @@ process DIFFBIND {
     plot(db_obj)
     dev.off()
 
+    cat(paste0(
+        "\\n",
+        "<div style='text-align: center;'>\\n",
+        "  <img src='diffbind_correlation.png' style='max-width: 100%; height: auto;'>\\n",
+        "</div>"
+    ), file="diffbind_corr_mqc.html")
+
     db_obj <- dba.count(db_obj, bParallel=TRUE)
 
-    if (requireNamespace("profileplyr", quietly = TRUE)) {
-        pdf("diffbind_profile.pdf")
-        try(dba.plotProfile(db_obj, bUseSampleSheet=TRUE))
+    try({
+        cor_matrix <- dba.overlap(db_obj, mode=DBA_OL_COR)
+        write.table(cor_matrix, file="diffbind_correlation_mqc.txt", sep="\t", quote=FALSE, col.names=NA)
+    }, silent=TRUE)
+
+    analysis_status <- try({
+        contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
+        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
+        db_obj <- dba.analyze(db_obj)
+    }, silent=FALSE)
+
+    if (!inherits(analysis_status, "try-error") && !is.null(db_obj\$contrasts)) {
+        res_db <- dba.report(db_obj)
+        write.csv(as.data.frame(res_db), "diff_bind_results.csv")
+
+        png("diffbind_pca.png", width=1000, height=800, res=120)
+        dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
         dev.off()
 
-        png("diffbind_profile.png", width=1000, height=800, res=120)
-        try(dba.plotProfile(db_obj, bUseSampleSheet=TRUE))
+        pdf("diffbind_volcano.pdf")
+        dba.plotVolcano(db_obj)
         dev.off()
-    } else {
-        message("profileplyr not installed. Skipping profile plot.")
     }
 
-    writeLines(c(paste0("\\"!{task.process}\\":"), paste0("    diffbind: ", packageVersion("DiffBind"))), "versions.yml")
-    
-    # Esecuzione Bash separata per evitare errori di quoting in R
-    system("
-        if [ -f diffbind_correlation.png ]; then
-            IMG_CORR=$(base64 -w 0 diffbind_correlation.png)
-            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'$IMG_CORR'\" style=\"max-width:100%;\"></div>' > diffbind_corr_mqc.html
-        fi
-        if [ -f diffbind_profile.png ]; then
-            IMG_PROF=$(base64 -w 0 diffbind_profile.png)
-            echo '<div style=\"text-align:center;\"><img src=\"data:image/png;base64,'$IMG_PROF'\" style=\"max-width:100%;\"></div>' > diffbind_profile_mqc.html
-        fi
-    ")
-    '''
+    writeLines(c(
+        "\\"${task.process}\\":",
+        paste0("    diffbind: ", packageVersion("DiffBind"))
+    ), "versions.yml")
+    """
 }
