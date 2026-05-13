@@ -7,6 +7,8 @@ def create_fastq_channel(LinkedHashMap row) {
     meta.id         = row.sample.trim()
     meta.antibody   = (row.antibody && row.antibody.trim() != "") ? row.antibody.trim() : 'none'
     meta.control    = (row.control && row.control.trim() != "") ? row.control.trim() : 'none'
+    meta.condition  = (row.condition && row.condition.trim() != "") ? row.condition.trim() : 'NA'
+    meta.replicate  = (row.replicate && row.replicate.trim() != "") ? row.replicate.trim() : '1'
     meta.single_end = (row.fastq_2 == null || row.fastq_2.trim() == "") ? true : false
     meta.is_control = (meta.antibody.toLowerCase() == 'igg' || row.is_control == 'true') ? true : false
 
@@ -30,6 +32,7 @@ workflow {
     Protocollo : ${params.protocol?.toUpperCase()}
     Genoma     : ${params.genome}
     Input      : ${params.input}
+    Output     : ${params.outdir}
     ===========================================
     """
 
@@ -39,7 +42,7 @@ workflow {
         .map { row -> create_fastq_channel(row) }
     
     ch_input.view { meta, reads -> 
-        "LOG: Lettura campioni -> ID: ${meta.id} | Antibody: ${meta.antibody} | Is_Control: ${meta.is_control}" 
+        "LOG: ID: ${meta.id} | Cond: ${meta.condition} | Repl: ${meta.replicate} | Control: ${meta.is_control}" 
     }
 
     ATAC_CHIP_PIPELINE ( ch_input )
