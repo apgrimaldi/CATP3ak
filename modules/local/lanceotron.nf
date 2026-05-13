@@ -16,48 +16,69 @@ process LANCEOTRON {
     script:
     def prefix = "${meta.id}"
     
-    // Cambiamo la logica dei comandi in base alla presenza del controllo
     if (bam_ctrl && bw_ctrl) {
         """
+        # ChIP-seq con Controllo
+        # file (posizionale) = bw_ip
+        # -i = bw_ctrl
+        # -f = cartella di output (.)
         lanceotron callPeaksInput \\
-            -f ${bam_ip} \\
-            -w ${bw_ip} \\
-            -i ${bam_ctrl} \\
-            -c ${bw_ctrl} \\
-            -o . \\
+            ${bw_ip} \\
+            -i ${bw_ctrl} \\
+            -f . \\
             -t 0.9 \\
-            -s 1000
+            -w 1000
 
-        mv L_extract_peaks.bed ${prefix}_lanceotron_peaks.bed
-        
+        # Rinominiamo l'output. Lanceotron genera file basandosi sul nome del BigWig
+        # o un generico L_extract_peaks.bed
+        if [ -f L_extract_peaks.bed ]; then
+            mv L_extract_peaks.bed ${prefix}_lanceotron_peaks.bed
+        elif [ -f "${bw_ip.baseName}_peaks.bed" ]; then
+            mv "${bw_ip.baseName}_peaks.bed" ${prefix}_lanceotron_peaks.bed
+        fi
+
+        # Generazione conteggio per MultiQC
         echo "Sample Peaks" > ${prefix}.lanceotron_counts.txt
-        COUNT=\$(grep -v "^#" ${prefix}_lanceotron_peaks.bed | wc -l)
-        echo "${prefix} \$COUNT" >> ${prefix}.lanceotron_counts.txt
+        if [ -f ${prefix}_lanceotron_peaks.bed ]; then
+            COUNT=\$(grep -v "^#" ${prefix}_lanceotron_peaks.bed | wc -l)
+            echo "${prefix} \$COUNT" >> ${prefix}.lanceotron_counts.txt
+        else
+            echo "${prefix} 0" >> ${prefix}.lanceotron_counts.txt
+        fi
 
-        cat <<EOF > versions.yml
+        cat <<-END_VERSIONS > versions.yml
         "${task.process}":
             lanceotron: 1.2.7
-        EOF
+        END_VERSIONS
         """
     } else {
         """
+        # ATAC-seq (Senza controllo)
+        # file (posizionale) = bw_ip
         lanceotron callPeaks \\
-            -f ${bam_ip} \\
-            -w ${bw_ip} \\
-            -o . \\
+            ${bw_ip} \\
+            -f . \\
             -t 0.9 \\
-            -s 1000
+            -w 1000
 
-        mv L_extract_peaks.bed ${prefix}_lanceotron_peaks.bed
-        
+        if [ -f L_extract_peaks.bed ]; then
+            mv L_extract_peaks.bed ${prefix}_lanceotron_peaks.bed
+        elif [ -f "${bw_ip.baseName}_peaks.bed" ]; then
+            mv "${bw_ip.baseName}_peaks.bed" ${prefix}_lanceotron_peaks.bed
+        fi
+
         echo "Sample Peaks" > ${prefix}.lanceotron_counts.txt
-        COUNT=\$(grep -v "^#" ${prefix}_lanceotron_peaks.bed | wc -l)
-        echo "${prefix} \$COUNT" >> ${prefix}.lanceotron_counts.txt
+        if [ -f ${prefix}_lanceotron_peaks.bed ]; then
+            COUNT=\$(grep -v "^#" ${prefix}_lanceotron_peaks.bed | wc -l)
+            echo "${prefix} \$COUNT" >> ${prefix}.lanceotron_counts.txt
+        else
+            echo "${prefix} 0" >> ${prefix}.lanceotron_counts.txt
+        fi
 
-        cat <<EOF > versions.yml
+        cat <<-END_VERSIONS > versions.yml
         "${task.process}":
             lanceotron: 1.2.7
-        EOF
+        END_VERSIONS
         """
     }
 }
