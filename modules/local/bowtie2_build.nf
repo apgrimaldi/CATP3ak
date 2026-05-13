@@ -1,7 +1,7 @@
 process BOWTIE2_BUILD {
     tag "$fasta"
     label 'process_high'
-    container 'quay.io/biocontainers/bowtie2:2.5.2--py39h6fed5c7_0' 
+    container 'quay.io/biocontainers/bowtie2:2.5.5--ha27dd3b_0' 
 
     input:
     path fasta
