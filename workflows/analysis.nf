@@ -107,17 +107,25 @@ workflow ATAC_CHIP_PIPELINE {
         ip:      true
     }
 
-    // --- Lanceotron Input Preparation (BAM + BigWig 1bp) ---
+    // --- Lanceotron Input Preparation ---
     if (params.protocol == 'atac') {
         ch_lanceotron_input = ch_bams_branched.ip
             .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bai, bw -> [ meta, bam, bw, [], [] ] } // Niente controllo
+            .map { meta, bam, bw -> [ meta, bam, bw, [], [] ] }
     } else {
-        ch_lanceotron_input = ch_bams_branched.ip
+        // Accoppiamo IP con i propri BigWig
+        ch_ip_bundle = ch_bams_branched.ip
             .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bai, bw -> [ meta.control, meta, bam, bw ] }
-            .combine(ch_bams_branched.control.join(DEEPTOOLS.out.bw_lanceotron)
-                .map { meta, bam, bai, bw -> [ meta.id, bam, bw ] }, by: 0)
+            .map { meta, bam, bw -> [ meta.control, meta, bam, bw ] }
+
+        // Accoppiamo Controlli con i propri BigWig
+        ch_ctrl_bundle = ch_bams_branched.control
+            .join(DEEPTOOLS.out.bw_lanceotron)
+            .map { meta, bam, bw -> [ meta.id, bam, bw ] }
+
+        // Join finale: una riga per ogni coppia IP-Controllo
+        ch_lanceotron_input = ch_ip_bundle
+            .combine(ch_ctrl_bundle, by: 0)
             .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw -> 
                 [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ] 
             }
@@ -192,7 +200,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
-    // --- Profileplyr Analysis (Using Lanceotron Peaks & Display BigWigs) ---
+    // --- Profileplyr Analysis ---
     PROFILEPLYR (
         LANCEOTRON.out.peaks.map{ it[1] }.collect(),
         DEEPTOOLS.out.bw_display.map{ it[1] }.collect()
@@ -229,7 +237,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc,
         ch_diffbind_mqc,
         ch_profileplyr_mqc,
-        ch_lanceotron_mqc, // Passato a MULTIQC come previsto nel modulo
+        ch_lanceotron_mqc,
         ch_versions_mqc
     )
 }
