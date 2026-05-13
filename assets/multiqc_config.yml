@@ -21,9 +21,10 @@ report_section_order:
   picard_mark_duplicates: {order: -500}
   macs3_narrow_count: {order: -600}
   macs3_broad_count: {order: -700}
+  lanceotron_peaks: {order: -750}
   diffbind_reproducibility: {order: -800}
-  diffbind_profile_plot: {order: -805}
   diffbind_pca_plot: {order: -810}
+  diffbind_profile_plot: {order: -815}
   diffbind_heatmap: {order: -820}
   frip_score: {order: -900}
   homer_annotations_narrow: {order: -1000}
@@ -46,6 +47,9 @@ custom_data:
   macs3_broad_count:
     section_name: "MACS3: Broad Peak Count"
     plot_type: "bargraph"
+  lanceotron_peaks:
+    section_name: "Lanceotron: Deep Learning Peaks"
+    plot_type: "bargraph"
   frip_score:
     section_name: "QC: FRiP Score"
     plot_type: "bargraph"
@@ -64,6 +68,7 @@ sp:
   frip_score: {fn: "*.FRiP.txt"}
   macs3_narrow_count: {fn: "*.narrow_counts.txt"}
   macs3_broad_count: {fn: "*.broad_counts.txt"}
+  lanceotron_peaks: {fn: "*.lanceotron_counts.txt"}
 
 sample_names_replace_suffixes:
   - ".plotFingerprint.qcmetrics"
@@ -71,6 +76,7 @@ sample_names_replace_suffixes:
   - ".homer_stats_mqc"
   - ".narrow_counts"
   - ".broad_counts"
+  - ".lanceotron_counts"
   - ".FRiP"
   - ".stats"
   - ".flagstat"
