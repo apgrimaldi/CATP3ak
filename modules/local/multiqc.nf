@@ -2,7 +2,7 @@ process MULTIQC {
     label 'process_medium'
     container 'quay.io/biocontainers/multiqc:1.34--pyhdfd78af_0'
 
-    publishDir "${params.outdir}/00_MultiQC_Report", mode: 'copy'
+    publishDir "${params.outdir}/10_MultiQC_Report", mode: 'copy'
 
     input:
     path multiqc_config      
@@ -18,6 +18,7 @@ process MULTIQC {
     path ('frip/*')
     path ('homer/*')
     path ('diffbind/*')      
+    path ('profileplyr/*')    // <--- Aggiunto per ricevere i risultati di profileplyr
     path versions
 
     output:
@@ -27,7 +28,6 @@ process MULTIQC {
 
     script:
     def args = task.ext.args ?: ''
-
     def config_opt = multiqc_config && multiqc_config.name != 'empty_config' ? "--config $multiqc_config" : ''
     
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
