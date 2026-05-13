@@ -1,24 +1,23 @@
 nextflow.enable.dsl=2
 
-// --- INCLUDE DEI MODULI ---
-include { FASTQC }                  from '../modules/local/fastqc.nf'
-include { TRIMGALORE }              from '../modules/local/trimgalore.nf'
-include { BOWTIE2_BUILD }           from '../modules/local/bowtie2_build.nf'
-include { BOWTIE2 }                 from '../modules/local/bowtie2.nf'
-include { SAMTOOLS_SORT }           from '../modules/local/samtools_sort.nf'
-include { SAMTOOLS_STATS }          from '../modules/local/samtools_stats.nf'
-include { PICARD_MARKDUPLICATES }   from '../modules/local/picard_markduplicates.nf'
-include { FILTERING }               from '../modules/local/filtering.nf'
-include { MACS3_ATAC_NARROW }       from '../modules/local/macs3_atac_narrow.nf'
-include { MACS3_ATAC_BROAD }        from '../modules/local/macs3_atac_broad.nf'
-include { MACS3_CHIP_NARROW }       from '../modules/local/macs3_chip_narrow.nf'
-include { MACS3_CHIP_BROAD }        from '../modules/local/macs3_chip_broad.nf'
-include { HOMER_ANNOTATEPEAKS }     from '../modules/local/homer_annotate.nf'
-include { CALC_FRIP }               from '../modules/local/calc_frip.nf'
-include { DEEPTOOLS }               from '../modules/local/deeptools.nf'
-include { DIFFBIND }                from '../modules/local/diffbind.nf'
-include { MULTIQC }                 from '../modules/local/multiqc.nf'
-include { SAMTOOLS_INDEX }          from '../modules/local/samtools_index.nf'
+include { FASTQC } from '../modules/local/fastqc.nf'
+include { TRIMGALORE } from '../modules/local/trimgalore.nf'
+include { BOWTIE2_BUILD } from '../modules/local/bowtie2_build.nf'
+include { BOWTIE2 } from '../modules/local/bowtie2.nf'
+include { SAMTOOLS_SORT } from '../modules/local/samtools_sort.nf'
+include { SAMTOOLS_STATS } from '../modules/local/samtools_stats.nf'
+include { PICARD_MARKDUPLICATES } from '../modules/local/picard_markduplicates.nf'
+include { FILTERING } from '../modules/local/filtering.nf'
+include { MACS3_ATAC_NARROW } from '../modules/local/macs3_atac_narrow.nf'
+include { MACS3_ATAC_BROAD } from '../modules/local/macs3_atac_broad.nf'
+include { MACS3_CHIP_NARROW } from '../modules/local/macs3_chip_narrow.nf'
+include { MACS3_CHIP_BROAD } from '../modules/local/macs3_chip_broad.nf'
+include { HOMER_ANNOTATEPEAKS } from '../modules/local/homer_annotate.nf'
+include { CALC_FRIP } from '../modules/local/calc_frip.nf'
+include { DEEPTOOLS } from '../modules/local/deeptools.nf'
+include { DIFFBIND } from '../modules/local/diffbind.nf'
+include { MULTIQC } from '../modules/local/multiqc.nf'
+include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
 
 workflow ATAC_CHIP_PIPELINE {
@@ -29,7 +28,6 @@ workflow ATAC_CHIP_PIPELINE {
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
-    // --- GESTIONE GENOMA E INDICI ---
     def reference_file   = null
     def gtf_file         = null
     def bowtie2_index    = null
@@ -61,7 +59,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     }
 
-    // --- QC E ALLINEAMENTO ---
     FASTQC ( ch_input )
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(FASTQC.out.versions, TRIMGALORE.out.versions)
@@ -88,7 +85,6 @@ workflow ATAC_CHIP_PIPELINE {
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
     DEEPTOOLS ( ch_final_bams )
 
-    // --- BRANCHING PER PEAK CALLING ---
     ch_bams_branched = ch_final_bams.branch { meta, bam, bai ->
         control: meta.is_control == true
         ip:      true
@@ -103,7 +99,6 @@ workflow ATAC_CHIP_PIPELINE {
             .map { control_id, meta, ip_bam, control_bam -> [ meta, ip_bam, control_bam ] }
     }
 
-    // --- MACS3 ---
     if (params.protocol == 'atac') {
         MACS3_ATAC_NARROW ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
         MACS3_ATAC_BROAD ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
@@ -122,7 +117,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-    // --- QC POST-PEAKS ---
     ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }.join(ch_narrow_peaks)
     CALC_FRIP ( ch_frip_input )
 
@@ -134,7 +128,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // --- DIFFBIND (SISTEMATO) ---
     ch_diffbind_mqc = Channel.empty()
     if (!params.skip_diffbind) {
         ch_diffbind_prep = ch_bams_branched.ip
@@ -144,7 +137,6 @@ workflow ATAC_CHIP_PIPELINE {
 
         ch_db_samplesheet = ch_diffbind_prep
             .map { meta, bam, bai, peak -> 
-                // Usiamo meta.antibody come Condition se condition non esiste
                 def cond = meta.condition ?: meta.antibody
                 def repl = meta.replicate ?: "1"
                 "${meta.id},${cond},${repl},${bam.name},${peak.name},narrow" 
@@ -158,14 +150,10 @@ workflow ATAC_CHIP_PIPELINE {
             ch_narrow_peaks.map{ it[1] }.collect() 
         )
         
-        ch_diffbind_mqc = DIFFBIND.out.mqc_html.collect()
-            .mix(DIFFBIND.out.mqc_txt.collect())
-            .collect()
-            .ifEmpty([])
+        ch_diffbind_mqc = DIFFBIND.out.mqc_html.collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
-    // --- RACCOLTA FINALE CANALI MULTIQC ---
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
     ch_fastqc_mqc   = FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([])
