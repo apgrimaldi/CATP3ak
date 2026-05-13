@@ -38,13 +38,10 @@ process DIFFBIND {
         db_obj <- dba(db_obj, mask=keep_mask)
     }
 
-    # --- Correlation Heatmap ---
-    pdf("diffbind_correlation.pdf")
-    plot(db_obj)
-    dev.off()
-
-    png("diffbind_correlation.png", width=800, height=800, res=120)
-    plot(db_obj)
+    # --- Heatmap di Correlazione ---
+    # margin=10 serve a non tagliare i nomi dei campioni
+    png("diffbind_correlation.png", width=900, height=900, res=120)
+    plot(db_obj, margin=10)
     dev.off()
 
     img_corr_64 <- base64encode("diffbind_correlation.png")
@@ -73,12 +70,8 @@ process DIFFBIND {
         write.csv(as.data.frame(res_db), "diff_bind_results.csv")
 
         # --- PCA Plot ---
-        png("diffbind_pca.png", width=1000, height=800, res=120)
+        png("diffbind_pca.png", width=900, height=800, res=120)
         dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
-        dev.off()
-
-        pdf("diffbind_volcano.pdf")
-        dba.plotVolcano(db_obj)
         dev.off()
 
         img_pca_64 <- base64encode("diffbind_pca.png")
