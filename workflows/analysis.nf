@@ -1,10 +1,5 @@
 nextflow.enable.dsl=2
 
-/*
-========================================================================================
-    INCLUDE MODULES
-========================================================================================
-*/
 include { FASTQC } from '../modules/local/fastqc.nf'
 include { TRIMGALORE } from '../modules/local/trimgalore.nf'
 include { BOWTIE2_BUILD } from '../modules/local/bowtie2_build.nf'
@@ -27,11 +22,6 @@ include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
 
-/*
-========================================================================================
-    WORKFLOW ATAC_CHIP_PIPELINE
-========================================================================================
-*/
 workflow ATAC_CHIP_PIPELINE {
     take:
     ch_input
@@ -40,7 +30,6 @@ workflow ATAC_CHIP_PIPELINE {
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
-    // --- Genome Configuration ---
     def reference_file   = null
     def gtf_file         = null
     def bowtie2_index    = null
@@ -62,7 +51,6 @@ workflow ATAC_CHIP_PIPELINE {
     }
     if (!m_genome || m_genome == 'custom') { m_genome = 'hs' }
 
-    // --- Alignment Index ---
     ch_index_internal = Channel.empty() 
     if (bowtie2_index) {
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
@@ -72,7 +60,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     }
 
-    // --- Preprocessing ---
     FASTQC ( ch_input )
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(FASTQC.out.versions, TRIMGALORE.out.versions)
@@ -98,34 +85,28 @@ workflow ATAC_CHIP_PIPELINE {
 
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
     
-    // --- DeepTools: genera BigWig per visualizzazione e tecnici (1bp) ---
     DEEPTOOLS ( ch_final_bams )
 
-    // --- Branch for IP vs Control ---
     ch_bams_branched = ch_final_bams.branch { meta, bam, bai ->
         control: meta.is_control == true
         ip:      true
     }
 
-    // --- Lanceotron Input Preparation ---
     if (params.protocol == 'atac') {
         ch_lanceotron_input = ch_bams_branched.ip
             .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bw -> [ meta, bam, bw, [], [] ] }
+            .map { meta, bam, bai, bw -> [ meta, bam, bw, [], [] ] }
     } else {
-        // Accoppiamo IP con i propri BigWig
-        ch_ip_bundle = ch_bams_branched.ip
+        ch_ip_l6n = ch_bams_branched.ip
             .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bw -> [ meta.control, meta, bam, bw ] }
+            .map { meta, bam, bai, bw -> [ meta.control, meta, bam, bw ] }
 
-        // Accoppiamo Controlli con i propri BigWig
-        ch_ctrl_bundle = ch_bams_branched.control
+        ch_ctrl_l6n = ch_bams_branched.control
             .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bw -> [ meta.id, bam, bw ] }
+            .map { meta, bam, bai, bw -> [ meta.id, bam, bw ] }
 
-        // Join finale: una riga per ogni coppia IP-Controllo
-        ch_lanceotron_input = ch_ip_bundle
-            .combine(ch_ctrl_bundle, by: 0)
+        ch_lanceotron_input = ch_ip_l6n
+            .combine(ch_ctrl_l6n, by: 0)
             .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw -> 
                 [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ] 
             }
@@ -134,17 +115,8 @@ workflow ATAC_CHIP_PIPELINE {
     LANCEOTRON ( ch_lanceotron_input )
     ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
 
-    // --- MACS3 Peak Calling Preparation ---
     if (params.protocol == 'atac') {
         ch_macs_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
-    } else {
-        ch_macs_input = ch_bams_branched.ip
-            .map { meta, bam, bai -> [ meta.control, meta, bam ] }
-            .combine(ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }, by: 0)
-            .map { control_id, meta, ip_bam, control_bam -> [ meta, ip_bam, control_bam ] }
-    }
-
-    if (params.protocol == 'atac') {
         MACS3_ATAC_NARROW ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
         MACS3_ATAC_BROAD ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
         ch_narrow_peaks = MACS3_ATAC_NARROW.out.peaks
@@ -153,8 +125,12 @@ workflow ATAC_CHIP_PIPELINE {
         ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
         ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.versions.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.versions.map{ it[1] })
     } else {
-        MACS3_CHIP_NARROW ( ch_macs_input, m_genome )
-        MACS3_CHIP_BROAD ( ch_macs_input, m_genome )
+        ch_ip_m3 = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, meta, bam ] }
+        ch_ct_m3 = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
+        ch_macs_chip_input = ch_ip_m3.combine(ch_ct_m3, by: 0).map { cid, meta, ip, ct -> [ meta, ip, ct ] }
+
+        MACS3_CHIP_NARROW ( ch_macs_chip_input, m_genome )
+        MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
         ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
         ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
         ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
@@ -162,8 +138,9 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
     }
 
-    // --- FRiP Score & Annotation ---
-    ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }.join(ch_narrow_peaks)
+    ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam ] }
+        .join(ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] })
+        .map { id, meta, bam, peak -> [ meta, bam, peak ] }
     CALC_FRIP ( ch_frip_input )
 
     ch_homer_mqc = Channel.empty()
@@ -174,7 +151,6 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // --- DiffBind Analysis ---
     ch_diffbind_mqc = Channel.empty()
     if (!params.skip_diffbind) {
         ch_diffbind_prep = ch_bams_branched.ip
@@ -190,54 +166,34 @@ workflow ATAC_CHIP_PIPELINE {
             }
             .collectFile(name: 'samplesheet_diffbind.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        DIFFBIND ( 
-            ch_db_samplesheet, 
-            ch_final_bams.map{ it[1] }.collect(), 
-            ch_final_bams.map{ it[2] }.collect(), 
-            ch_narrow_peaks.map{ it[1] }.collect() 
-        )
+        DIFFBIND ( ch_db_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_mqc = DIFFBIND.out.mqc_html.mix(DIFFBIND.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
     }
 
-    // --- Profileplyr Analysis ---
-    PROFILEPLYR (
-        LANCEOTRON.out.peaks.map{ it[1] }.collect(),
-        DEEPTOOLS.out.bw_display.map{ it[1] }.collect()
-    )
+    PROFILEPLYR ( LANCEOTRON.out.peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect() )
     ch_profileplyr_mqc = PROFILEPLYR.out.mqc_html.collect().ifEmpty([])
     ch_versions = ch_versions.mix(PROFILEPLYR.out.versions)
 
-    // --- Final Quality Control Report (MultiQC) ---
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
-    ch_fastqc_mqc   = FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([])
-    ch_trim_mqc     = TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([])
-    ch_bowtie_mqc   = BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([])
-    ch_picard_mqc   = PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([])
-    ch_stats_mqc    = SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([])
-    ch_frip_mqc     = CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([])
-    ch_macs_mqc     = ch_macs_logs_mqc.collect().ifEmpty([])
-    ch_counts_mqc   = ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([])
-    ch_lanceotron_mqc = LANCEOTRON.out.counts_mqc.collect().ifEmpty([])
-    ch_deeptools_mqc = DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.mix(DEEPTOOLS.out.fingerprint_metrics.map{ it[1] }).collect().ifEmpty([])
-
+    
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         ch_summary_mqc,
-        ch_fastqc_mqc,
-        ch_trim_mqc,
-        ch_bowtie_mqc,
-        ch_picard_mqc,
-        ch_stats_mqc,
-        ch_deeptools_mqc,
-        ch_macs_mqc,
-        ch_counts_mqc,
-        ch_frip_mqc,
+        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),
+        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),
+        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
+        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
+        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
+        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.mix(DEEPTOOLS.out.fingerprint_metrics.map{ it[1] }).collect().ifEmpty([]),
+        ch_macs_logs_mqc.collect().ifEmpty([]),
+        ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([]),
+        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),
         ch_homer_mqc,
         ch_diffbind_mqc,
         ch_profileplyr_mqc,
-        ch_lanceotron_mqc,
+        LANCEOTRON.out.counts_mqc.collect().ifEmpty([]),
         ch_versions_mqc
     )
 }
