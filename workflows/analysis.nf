@@ -150,6 +150,8 @@ workflow ATAC_CHIP_PIPELINE {
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_ANNOTATEPEAKS ( ch_homer_input, file(reference_file), file(gtf_file) )
         ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+    } else {
+        ch_homer_mqc = Channel.value([])
     }
 
     ch_diffbind_mqc = Channel.empty()
@@ -170,9 +172,10 @@ workflow ATAC_CHIP_PIPELINE {
         DIFFBIND ( ch_db_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_mqc = DIFFBIND.out.mqc_html.mix(DIFFBIND.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND.out.versions)
+    } else {
+        ch_diffbind_mqc = Channel.value([])
     }
 
-    // --- BLOCCO PROFILEPLYR CON SISTEMA DI SKIP ---
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
         PROFILEPLYR_LANCE ( 
@@ -197,7 +200,6 @@ workflow ATAC_CHIP_PIPELINE {
             PROFILEPLYR_MACS.out.versions
         )
     } else {
-        // Se skippato, inviamo un valore vuoto per sbloccare MultiQC
         ch_profileplyr_mqc = Channel.value([])
     }
 
@@ -219,7 +221,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_mqc,
         ch_diffbind_mqc,
         ch_profileplyr_mqc,
-        LANCEOTRON.out.counts_mqc.collect().ifEmpty([]), // Aggiunto collect per sicurezza
+        LANCEOTRON.out.counts_mqc.collect().ifEmpty([]),
         ch_versions_mqc
     )
 }
