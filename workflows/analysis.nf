@@ -12,16 +12,23 @@ include { MACS3_ATAC_NARROW } from '../modules/local/macs3_atac_narrow.nf'
 include { MACS3_ATAC_BROAD } from '../modules/local/macs3_atac_broad.nf'
 include { MACS3_CHIP_NARROW } from '../modules/local/macs3_chip_narrow.nf'
 include { MACS3_CHIP_BROAD } from '../modules/local/macs3_chip_broad.nf'
-include { HOMER_ANNOTATEPEAKS } from '../modules/local/homer_annotate.nf'
 include { CALC_FRIP } from '../modules/local/calc_frip.nf'
 include { DEEPTOOLS } from '../modules/local/deeptools.nf'
-include { DIFFBIND } from '../modules/local/diffbind.nf'
 include { LANCEOTRON } from '../modules/local/lanceotron.nf'
 include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
-include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
+
+// Nuovo modulo per il filtraggio dei picchi
+include { FILTER_LANCEOTRON } from '../modules/local/filter_lanceotron.nf'
+
+// Include sdoppiati con alias per separare i flussi downstream
+include { HOMER_ANNOTATEPEAKS as HOMER_MACS } from '../modules/local/homer_annotate.nf'
+include { HOMER_ANNOTATEPEAKS as HOMER_LANCE } from '../modules/local/homer_annotate.nf'
+include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
+include { DIFFBIND as DIFFBIND_LANCE } from '../modules/local/diffbind.nf'
 include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
+include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
 
 workflow ATAC_CHIP_PIPELINE {
     take:
@@ -113,8 +120,12 @@ workflow ATAC_CHIP_PIPELINE {
             }
     }
 
+    // Generazione picchi interi Lanceotron
     LANCEOTRON ( ch_lanceotron_input )
     ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
+
+    // Filtraggio score strettamente maggiore di 0.5 (modificabile via --lanceotron_threshold)
+    FILTER_LANCEOTRON ( LANCEOTRON.out.peaks, params.lanceotron_threshold ?: 0.5 )
 
     if (params.protocol == 'atac') {
         ch_macs_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
@@ -144,46 +155,83 @@ workflow ATAC_CHIP_PIPELINE {
         .map { id, meta, bam, peak -> [ meta, bam, peak ] }
     CALC_FRIP ( ch_frip_input )
 
-    ch_homer_mqc = Channel.empty()
+    // =========================================================================
+    // ANNOTAZIONE CON HOMER (SDOPPIATA)
+    // =========================================================================
+    ch_homer_macs_mqc = Channel.empty()
+    ch_homer_lance_mqc = Channel.empty()
+
     if (!params.skip_homer && reference_file && gtf_file) {
-        ch_homer_input = ch_narrow_peaks.mix(ch_broad_peaks)
+        // Annotazione MACS3
+        ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks)
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_ANNOTATEPEAKS ( ch_homer_input, file(reference_file), file(gtf_file) )
-        ch_homer_mqc = HOMER_ANNOTATEPEAKS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
-    } else {
-        ch_homer_mqc = Channel.value([])
+        HOMER_MACS ( ch_homer_macs_input, file(reference_file), file(gtf_file) )
+        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+
+        // Annotazione Lanceotron (usa solo i picchi FILTRATI)
+        ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks
+            .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
+        HOMER_LANCE ( ch_homer_lance_input, file(reference_file), file(gtf_file) )
+        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
-    ch_diffbind_mqc = Channel.empty()
+    // =========================================================================
+    // ANALISI DIFFERENZIALE DIFFBIND (SDOPPIATA)
+    // =========================================================================
+    ch_diffbind_macs_mqc = Channel.empty()
+    ch_diffbind_lance_mqc = Channel.empty()
+
     if (!params.skip_diffbind) {
-        ch_diffbind_prep = ch_bams_branched.ip
+        // --- DiffBind per MACS3 ---
+        ch_diffbind_macs_prep = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
             .join( ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] } )
             .map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
 
-        ch_db_samplesheet = ch_diffbind_prep
+        ch_db_macs_samplesheet = ch_diffbind_macs_prep
             .map { meta, bam, bai, peak -> 
                 def cond = meta.condition ?: meta.antibody
                 def repl = meta.replicate ?: "1"
                 "${meta.id},${cond},${repl},${bam.name},${peak.name},narrow" 
             }
-            .collectFile(name: 'samplesheet_diffbind.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+            .collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        DIFFBIND ( ch_db_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
-        ch_diffbind_mqc = DIFFBIND.out.mqc_html.mix(DIFFBIND.out.mqc_txt).collect().ifEmpty([])
-        ch_versions = ch_versions.mix(DIFFBIND.out.versions)
-    } else {
-        ch_diffbind_mqc = Channel.value([])
+        DIFFBIND_MACS ( ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
+        ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
+        ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
+
+        // --- DiffBind per Lanceotron (usa solo i picchi FILTRATI) ---
+        ch_diffbind_lance_prep = ch_bams_branched.ip
+            .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
+            .join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } )
+            .map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
+
+        ch_db_lance_samplesheet = ch_diffbind_lance_prep
+            .map { meta, bam, bai, peak -> 
+                def cond = meta.condition ?: meta.antibody
+                def repl = meta.replicate ?: "1"
+                "${meta.id},${cond},${repl},${bam.name},${peak.name},lanceotron" 
+            }
+            .collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+
+        DIFFBIND_LANCE ( ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
+        ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
+        ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
     }
 
+    // =========================================================================
+    // GENERAZIONE HEATMAPS PROFILEPLYR (SDOPPIATA)
+    // =========================================================================
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
+        // Profileplyr su Lanceotron (usa solo i picchi FILTRATI)
         PROFILEPLYR_LANCE ( 
-            LANCEOTRON.out.peaks.map{ it[1] }.collect(), 
+            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "lanceotron"
         )
 
+        // Profileplyr su MACS3
         PROFILEPLYR_MACS ( 
             ch_narrow_peaks.map{ it[1] }.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
@@ -199,9 +247,11 @@ workflow ATAC_CHIP_PIPELINE {
             PROFILEPLYR_LANCE.out.versions,
             PROFILEPLYR_MACS.out.versions
         )
-    } else {
-        ch_profileplyr_mqc = Channel.value([])
     }
+
+    // Unione dei canali QC sdoppiati per il report finale
+    ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc).collect().ifEmpty([])
+    ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc).collect().ifEmpty([])
 
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
@@ -218,8 +268,8 @@ workflow ATAC_CHIP_PIPELINE {
         ch_macs_logs_mqc.collect().ifEmpty([]),
         ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([]),
         CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),
-        ch_homer_mqc,
-        ch_diffbind_mqc,
+        ch_all_homer_mqc,
+        ch_all_diffbind_mqc,
         ch_profileplyr_mqc,
         LANCEOTRON.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]),
         ch_versions_mqc
