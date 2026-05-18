@@ -15,7 +15,7 @@ process DIFFBIND {
     path "*_mqc.html"                  , emit: mqc_html, optional: true
     path "diffbind_correlation_mqc.txt", emit: mqc_txt, optional: true
     path "*.png"                       , emit: png, optional: true
-    path "diffbind_sig_peaks.bed"      , emit: sig_bed, optional: true // <-- NUOVO OUTPUT PER PROFILEPLYR
+    path "diffbind_sig_peaks.bed"      , emit: sig_bed, optional: true 
     path "versions.yml"                , emit: versions
 
     script:
@@ -57,7 +57,18 @@ process DIFFBIND {
         "</div>"
     ), file="diffbind_corr_mqc.html")
 
+    # 1. CONTEGGIO DEI READ SUI PICCHI
     db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=TRUE)
+
+    # === NUOVO: ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
+    try({
+        # Estrae i conteggi normalizzati (RPKM/TMM) per tutti i campioni
+        counts_data <- dba.peakset(db_obj, bRetrieve=TRUE)
+        if (!is.null(counts_data)) {
+            write.csv(as.data.frame(counts_data), "diffbind_counts_matrix.csv", row.names=FALSE)
+        }
+    }, silent=FALSE) # Messo a FALSE per vedere eventuali errori nel log se fallisce
+    # =======================================================================
 
     try({
         cor_matrix <- dba.overlap(db_obj, mode=DBA_OL_COR)
@@ -75,30 +86,36 @@ process DIFFBIND {
 
     if (!inherits(analysis_status, "try-error") && !is.null(db_obj\$contrasts)) {
         res_db <- dba.report(db_obj)
-        write.csv(as.data.frame(res_db), "diff_bind_results.csv")
+        
+        if(!is.null(res_db)) {
+            write.csv(as.data.frame(res_db), "diff_bind_results.csv")
 
-        # ESTRAZIONE E SCRITTURA DELLA MATRICE FILTRATA IN BED PER PROFILEPLYR
-        if(length(res_db) > 0) {
-            df_sig <- as.data.frame(res_db)
-            # Creiamo un formato BED standard (chr, start, end, name, score)
-            bed_sig <- df_sig[, c("seqnames", "start", "end")]
-            bed_sig\$name <- paste0("DB_site_", 1:nrow(bed_sig))
-            bed_sig\$score <- df_sig\$FDR
-            write.table(bed_sig, "diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
+            # ESTRAZIONE E SCRITTURA DELLA MATRICE FILTRATA IN BED PER PROFILEPLYR
+            if(length(res_db) > 0) {
+                df_sig <- as.data.frame(res_db)
+                # Creiamo un formato BED standard (chr, start, end, name, score)
+                bed_sig <- df_sig[, c("seqnames", "start", "end")]
+                bed_sig\$name <- paste0("DB_site_", 1:nrow(bed_sig))
+                bed_sig\$score <- df_sig\$FDR
+                write.table(bed_sig, "diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
+            }
         }
 
-        png("diffbind_pca.png", width=1000, height=800, res=150)
-        dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
-        dev.off()
+        # Generazione PCA solo se l'analisi differenziale ha prodotto risultati
+        try({
+            png("diffbind_pca.png", width=1000, height=800, res=150)
+            dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
+            dev.off()
 
-        img_pca_64 <- base64encode("diffbind_pca.png")
-        
-        cat(paste0(
-            "\\n",
-            "<div style='text-align: center; padding: 20px;'>\\n",
-            "  <img src='data:image/png;base64,", img_pca_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
-            "</div>"
-        ), file="diffbind_pca_mqc.html")
+            img_pca_64 <- base64encode("diffbind_pca.png")
+            
+            cat(paste0(
+                "\\n",
+                "<div style='text-align: center; padding: 20px;'>\\n",
+                "  <img src='data:image/png;base64,", img_pca_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
+                "</div>"
+            ), file="diffbind_pca_mqc.html")
+        }, silent=TRUE)
     }
 
     writeLines(c(
