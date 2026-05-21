@@ -19,10 +19,10 @@ include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
 
-// Nuovo modulo per il filtraggio dei picchi
+// Modulo per il filtraggio dei picchi Lanceotron (>0.5)
 include { FILTER_LANCEOTRON } from '../modules/local/filter_lanceotron.nf'
 
-// Include sdoppiati con alias per separare i flussi downstream
+// Moduli downstream sdoppiati tramite Alias
 include { HOMER_ANNOTATEPEAKS as HOMER_MACS } from '../modules/local/homer_annotate.nf'
 include { HOMER_ANNOTATEPEAKS as HOMER_LANCE } from '../modules/local/homer_annotate.nf'
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
@@ -120,11 +120,11 @@ workflow ATAC_CHIP_PIPELINE {
             }
     }
 
-    // Generazione picchi interi Lanceotron
+    // Peak calling con Lanceotron (Picchi Integrali Grezzi)
     LANCEOTRON ( ch_lanceotron_input )
     ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
 
-    // Filtraggio score strettamente maggiore di 0.5 (modificabile via --lanceotron_threshold)
+    // Filtro stringente su Lanceotron (Soglia standard > 0.5)
     FILTER_LANCEOTRON ( LANCEOTRON.out.peaks, params.lanceotron_threshold ?: 0.5 )
 
     if (params.protocol == 'atac') {
@@ -162,13 +162,13 @@ workflow ATAC_CHIP_PIPELINE {
     ch_homer_lance_mqc = Channel.empty()
 
     if (!params.skip_homer && reference_file && gtf_file) {
-        // Annotazione MACS3
+        // Annotazione MACS3 (Narrow + Broad)
         ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks)
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_MACS ( ch_homer_macs_input, file(reference_file), file(gtf_file) )
         ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
 
-        // Annotazione Lanceotron (usa solo i picchi FILTRATI)
+        // Annotazione Lanceotron (Usa unicamente i picchi FILTRATI > 0.5)
         ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_LANCE ( ch_homer_lance_input, file(reference_file), file(gtf_file) )
@@ -200,7 +200,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
 
-        // --- DiffBind per Lanceotron (usa solo i picchi FILTRATI) ---
+        // --- DiffBind per Lanceotron (Usa unicamente i picchi FILTRATI > 0.5) ---
         ch_diffbind_lance_prep = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
             .join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } )
@@ -220,20 +220,21 @@ workflow ATAC_CHIP_PIPELINE {
     }
 
     // =========================================================================
-    // GENERAZIONE HEATMAPS PROFILEPLYR (SDOPPIATA)
+    // GENERAZIONE HEATMAPS PROFILEPLYR (SDOPPIATA SUI PICCHI DIFFERENZIALI)
     // =========================================================================
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
-        // Profileplyr su Lanceotron (usa solo i picchi FILTRATI)
+        
+        // Profileplyr su Lanceotron: riceve il file BED dei picchi DIFFERENZIALI significativi da DiffBind
         PROFILEPLYR_LANCE ( 
-            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), 
+            DIFFBIND_LANCE.out.sig_bed.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "lanceotron"
         )
 
-        // Profileplyr su MACS3
+        // Profileplyr su MACS3: riceve il file BED dei picchi DIFFERENZIALI significativi da DiffBind
         PROFILEPLYR_MACS ( 
-            ch_narrow_peaks.map{ it[1] }.collect(), 
+            DIFFBIND_MACS.out.sig_bed.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "macs"
         )
@@ -249,7 +250,9 @@ workflow ATAC_CHIP_PIPELINE {
         )
     }
 
-    // Unione dei canali QC sdoppiati per il report finale
+    // =========================================================================
+    // CONVOGLIAMENTO OUTPUT E REPORT GENERALE MULTIQC
+    // =========================================================================
     ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc).collect().ifEmpty([])
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc).collect().ifEmpty([])
 
