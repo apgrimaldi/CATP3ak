@@ -14,7 +14,6 @@ process HOMER_ANNOTATEPEAKS {
     path  "versions.yml"                         , emit: versions
 
     script:
-    script:
     def args = task.ext.args ?: ''
     
     def peak_name = (peak != null && peak.name != null) ? peak.name : "unknown"
