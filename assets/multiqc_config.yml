@@ -18,18 +18,18 @@ report_section_order:
   cutadapt: {order: -200}
   bowtie2: {order: -300}
   samtools_stats: {order: -400}
-  picard_mark_duplicates: {order: -500}
-  macs3_narrow_count: {order: -600}
+  picard_markduplicates: {order: -500} # Corretto ID nativo (senza il secondo trattino basso)
+  deeptools_plot_fingerprint_counts: {order: -550}
+  frip_score: {order: -600}
+  macs3_narrow_count: {order: -650}
   macs3_broad_count: {order: -700}
   lanceotron_peaks: {order: -750}
-  diffbind_reproducibility: {order: -800}
-  diffbind_pca_plot: {order: -810}
-  diffbind_profile_plot: {order: -815}
+  homer_annotations_narrow: {order: -800}
+  homer_annotations_broad: {order: -810}
+  homer_annotations_lanceotron: {order: -815} # Aggiunta sezione per Lanceotron filtrato
   diffbind_heatmap: {order: -820}
-  frip_score: {order: -900}
-  homer_annotations_narrow: {order: -1000}
-  homer_annotations_broad: {order: -1010}
-  deeptools_plot_fingerprint_counts: {order: -1100}
+  diffbind_pca_plot: {order: -830}
+  diffbind_reproducibility: {order: -840}
   software_versions: {order: -1200}
 
 custom_data:
@@ -54,26 +54,33 @@ custom_data:
     section_name: "QC: FRiP Score"
     plot_type: "bargraph"
   homer_annotations_narrow:
-    section_name: "Annotation: Genomic Distribution (Narrow)"
+    section_name: "Annotation: Genomic Distribution (MACS3 Narrow)"
     plot_type: "bargraph"
   homer_annotations_broad:
-    section_name: "Annotation: Genomic Distribution (Broad)"
+    section_name: "Annotation: Genomic Distribution (MACS3 Broad)"
+    plot_type: "bargraph"
+  homer_annotations_lanceotron:
+    section_name: "Annotation: Genomic Distribution (Lanceotron Filtrati)"
     plot_type: "bargraph"
 
 sp:
   software_versions: {fn: "collated_versions.yml"}
   diffbind_heatmap: {fn: "diffbind_correlation_mqc.txt"}
-  homer_annotations_narrow: {fn: "*.homer_stats_mqc.txt"}
-  homer_annotations_broad: {fn: "*.homer_stats_mqc.txt"}
   frip_score: {fn: "*.FRiP.txt"}
   macs3_narrow_count: {fn: "*.narrow_counts.txt"}
   macs3_broad_count: {fn: "*.broad_counts.txt"}
   lanceotron_peaks: {fn: "*.lanceotron_counts.txt"}
+  # Separati i tre pattern di HOMER per evitare che si sovrascrivano a vicenda
+  homer_annotations_narrow: {fn: "*.narrow.homer_stats_mqc.txt"}
+  homer_annotations_broad: {fn: "*.broad.homer_stats_mqc.txt"}
+  homer_annotations_lanceotron: {fn: "*.lanceotron.homer_stats_mqc.txt"}
 
 sample_names_replace_suffixes:
   - ".plotFingerprint.qcmetrics"
   - ".plotFingerprint.raw"
-  - ".homer_stats_mqc"
+  - ".narrow.homer_stats_mqc"
+  - ".broad.homer_stats_mqc"
+  - ".lanceotron.homer_stats_mqc"
   - ".narrow_counts"
   - ".broad_counts"
   - ".lanceotron_counts"
@@ -83,3 +90,5 @@ sample_names_replace_suffixes:
   - ".idxstats"
   - ".metrics"
   - ".removed"
+  - ".sorted"
+  - ".filtered"
