@@ -27,8 +27,9 @@ process MACS3_CHIP_NARROW {
         -n $prefix \\
         --qvalue 0.05
 
-    PEAK_FILE=\$(ls *.narrowPeak)
-    if [ -f "\$PEAK_FILE" ]; then
+    # Conteggio sicuro con protezione dagli errori se non vengono generati picchi
+    PEAK_FILE=\$(ls *.narrowPeak 2>/dev/null | head -n 1)
+    if [ -n "\$PEAK_FILE" ] && [ -f "\$PEAK_FILE" ]; then
         count=\$(wc -l < "\$PEAK_FILE")
     else
         count=0
