@@ -3,9 +3,6 @@ process DEEPTOOLS {
     label 'process_high'
     container 'quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0'
     
-    publishDir "${params.outdir}/06_bigwig", mode: 'copy', pattern: "*.bw"
-    publishDir "${params.outdir}/06_bigwig/qc_fingerprint", mode: 'copy', pattern: "*.{pdf,txt}"
-
     input:
     tuple val(meta), path(bam), path(bai)
 
