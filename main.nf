@@ -36,8 +36,6 @@ workflow {
         }
     }
 
-    def skip_info = params.skip_profileplyr ? "YES (Heatmaps disabled)" : "NO"
-
     log.info """
     ===========================================
     A T A C / C H I P   P I P E L I N E
@@ -46,7 +44,6 @@ workflow {
     Genome        : ${params.genome}
     Input         : ${params.input}
     Output        : ${params.outdir}
-    Skip Heatmaps : ${skip_info}
     ===========================================
     """
 
