@@ -4,10 +4,6 @@ process TRIMGALORE {
 
     container 'quay.io/biocontainers/trim-galore:0.6.11--hdfd78af_0'
 
-//'quay.io/biocontainers/trim-galore:0.6.10--hdfd78af_0'
-
-    publishDir "${params.outdir}/02_trimmed", mode: 'copy'
-
     input:
     tuple val(meta), path(reads)
 
