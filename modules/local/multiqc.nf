@@ -2,8 +2,6 @@ process MULTIQC {
     label 'process_medium'
     container 'quay.io/biocontainers/multiqc:1.34--pyhdfd78af_0'
 
-    publishDir "${params.outdir}/10_MultiQC_Report", mode: 'copy'
-
     input:
     path multiqc_config      
     path workflow_summary    
