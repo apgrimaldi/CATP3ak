@@ -3,21 +3,21 @@ process MULTIQC {
     container 'quay.io/biocontainers/multiqc:1.34--pyhdfd78af_0'
 
     input:
-    path multiqc_config      
+    path multiqc_config
     path workflow_summary    
-    path ('fastqc/*')
-    path ('trimgalore/*')
-    path ('alignment/*')
-    path ('picard/*')
-    path ('samtools/*')
-    path ('deeptools/*')
-    path ('macs3/*')
-    path ('counts/*')        
-    path ('frip/*')
-    path ('homer/*')
-    path ('diffbind/*')      
-    path ('profileplyr/*')    
-    path ('lanceotron/*') 
+    path fastqc
+    path trimgalore
+    path alignment
+    path picard
+    path samtools
+    path deeptools
+    path macs3
+    path counts        
+    path frip
+    path homer
+    path diffbind      
+    path profileplyr    
+    path lanceotron 
     path versions
 
     output:
@@ -27,7 +27,9 @@ process MULTIQC {
 
     script:
     def args = task.ext.args ?: ''
-    def config_opt = multiqc_config && multiqc_config.name != 'empty_config' ? "--config $multiqc_config" : ''
+    
+    // Controllo difensiva: evita il flag se la configurazione è vuota
+    def config_opt = (multiqc_config && multiqc_config.name != 'empty_config' && multiqc_config.size() > 0) ? "--config $multiqc_config" : ''
     
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
 
