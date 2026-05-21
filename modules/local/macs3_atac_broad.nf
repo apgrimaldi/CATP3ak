@@ -26,8 +26,8 @@ process MACS3_ATAC_BROAD {
         --broad \\
         --broad-cutoff 0.1
 
-    PEAK_FILE=\$(ls *.broadPeak)
-    if [ -f "\$PEAK_FILE" ]; then
+    PEAK_FILE=\$(ls *.broadPeak 2>/dev/null | head -n 1)
+    if [ -n "\$PEAK_FILE" ] && [ -f "\$PEAK_FILE" ]; then
         count=\$(wc -l < "\$PEAK_FILE")
     else
         count=0
