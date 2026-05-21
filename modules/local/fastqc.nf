@@ -3,11 +3,6 @@ process FASTQC {
     label 'process_low'
 
     container 'quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0'
-    
-    // Nota: Il publishDir lo abbiamo già definito nel nextflow.config, 
-    // quindi qui potresti anche toglierlo per non creare conflitti, 
-    // ma lasciarlo non rompe nulla.
-    publishDir "${params.outdir}/01_fastqc", mode: 'copy'
 
     input:
     tuple val(meta), path(reads)
