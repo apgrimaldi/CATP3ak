@@ -4,8 +4,6 @@ process FILTERING {
     
     container 'quay.io/biocontainers/bedtools:2.30.0--hc088bd4_0'
 
-    publishDir "${params.outdir}/04_filtered", mode: 'copy'
-
     input:
     tuple val(meta), path(bam), path(bai)
     path  blacklist
