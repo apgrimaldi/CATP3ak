@@ -10,7 +10,7 @@ process MACS3_CHIP_BROAD {
     output:
     // Usiamo il glob * per catturare il file corretto indipendentemente dal nome esatto
     tuple val(meta), path("*.broadPeak")       , emit: peaks
-    tuple val(meta), path("*.xls")             , emit: xls
+    tuple val(meta), path("*.xls")              , emit: xls
     tuple val(meta), path("*.broad_counts.txt"), emit: count_broad
     path "versions.yml"                        , emit: versions
 
@@ -32,9 +32,9 @@ process MACS3_CHIP_BROAD {
         --broad-cutoff 0.1
 
     # Conteggio sicuro (MACS3 aggiunge spesso _peaks al nome fornito con -n)
-    # Cerchiamo il file .broadPeak indipendentemente dal nome esatto
-    PEAK_FILE=\$(ls *.broadPeak)
-    if [ -f "\$PEAK_FILE" ]; then
+    # Cerchiamo il file .broadPeak indipendentemente dal nome esatto con protezione 2>/dev/null
+    PEAK_FILE=\$(ls *.broadPeak 2>/dev/null | head -n 1)
+    if [ -n "\$PEAK_FILE" ] && [ -f "\$PEAK_FILE" ]; then
         count=\$(wc -l < "\$PEAK_FILE")
     else
         count=0
