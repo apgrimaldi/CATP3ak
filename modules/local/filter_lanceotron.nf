@@ -1,13 +1,14 @@
 process FILTER_LANCEOTRON {
     tag "$meta.id"
     label 'process_low'
+    container 'quay.io/biocontainers/python:3.10.4--h9a8a25e_0'
 
     input:
     tuple val(meta), path(peaks)
     val threshold
 
     output:
-    tuple val(meta), path("*_filtered.bed"), emit: filtered_peaks
+    tuple val(meta), path("*.filtered.bed"), emit: filtered_peaks
 
     script:
     """
@@ -18,7 +19,7 @@ process FILTER_LANCEOTRON {
         lines = f.readlines()
 
     if not lines:
-        with open("${meta.id}_lanceotron_filtered.bed", "w") as out:
+        with open("${meta.id}.filtered.bed", "w") as out:
             pass
         sys.exit(0)
 
@@ -32,7 +33,7 @@ process FILTER_LANCEOTRON {
             break
 
     if idx == -1:
-        with open("${meta.id}_lanceotron_filtered.bed", "w") as out:
+        with open("${meta.id}.filtered.bed", "w") as out:
             out.writelines(lines)
     else:
         out_lines = [lines[0]]
@@ -46,7 +47,7 @@ process FILTER_LANCEOTRON {
                 except ValueError:
                     continue
                     
-        with open("${meta.id}_lanceotron_filtered.bed", "w") as out:
+        with open("${meta.id}.filtered.bed", "w") as out:
             out.writelines(out_lines)
     """
 }
