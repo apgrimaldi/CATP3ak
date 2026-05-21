@@ -3,10 +3,6 @@ process PROFILEPLYR {
     label 'process_high'
     container 'quay.io/biocontainers/bioconductor-profileplyr:1.22.0--r44hdfd78af_0'
 
-    // Nota: I percorsi reali saranno sovrascritti dal nextflow.config, 
-    // ma teniamo questo come fallback coerente.
-    publishDir "${params.outdir}/11_profileplyr/${label}", mode: 'copy'
-
     input:
     path peaks
     path bigwigs
