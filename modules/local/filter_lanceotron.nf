@@ -1,7 +1,7 @@
 process FILTER_LANCEOTRON {
     tag "$meta.id"
     label 'process_low'
-    container 'quay.io/biocontainers/python:3.10.4--h9a8a25e_0'
+    container 'quay.io/biocontainers/python:3.9--1'
 
     input:
     tuple val(meta), path(peaks)
