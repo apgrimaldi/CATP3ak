@@ -25,8 +25,8 @@ process MACS3_ATAC_NARROW {
         --nomodel --shift -100 --extsize 200 \\
         --qvalue 0.05
 
-    PEAK_FILE=\$(ls *.narrowPeak)
-    if [ -f "\$PEAK_FILE" ]; then
+    PEAK_FILE=\$(ls *.narrowPeak 2>/dev/null | head -n 1)
+    if [ -n "\$PEAK_FILE" ] && [ -f "\$PEAK_FILE" ]; then
         count=\$(wc -l < "\$PEAK_FILE")
     else
         count=0
