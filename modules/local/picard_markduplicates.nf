@@ -2,8 +2,6 @@ process PICARD_MARKDUPLICATES {
     tag "$meta.id"
     label 'process_medium'
     container 'quay.io/biocontainers/picard:2.27.4--hdfd78af_0'
-    
-    publishDir "${params.outdir}/04_alignment", mode: 'copy'
 
     input:
     tuple val(meta), path(bam)
