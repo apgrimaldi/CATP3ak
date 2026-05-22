@@ -162,16 +162,16 @@ workflow ATAC_CHIP_PIPELINE {
     ch_homer_lance_mqc = Channel.empty()
 
     if (!params.skip_homer && reference_file && gtf_file) {
-        // Annotazione MACS3 (Narrow + Broad)
+        // Annotazione MACS3 (Narrow + Broad) - AGGIUNTO PREFISSO "macs3"
         ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks)
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_MACS ( ch_homer_macs_input, file(reference_file), file(gtf_file) )
+        HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
         ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
 
-        // Annotazione Lanceotron (Usa unicamente i picchi FILTRATI > 0.5)
+        // Annotazione Lanceotron (Usa unicamente i picchi FILTRATI > 0.5) - AGGIUNTO PREFISSO "lanceotron"
         ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_LANCE ( ch_homer_lance_input, file(reference_file), file(gtf_file) )
+        HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
         ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
@@ -196,11 +196,12 @@ workflow ATAC_CHIP_PIPELINE {
             }
             .collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        DIFFBIND_MACS ( ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
+        // AGGIUNTO PREFISSO "macs3"
+        DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
 
-        // --- DiffBind per Lanceotron (Usa unicamente i picchi FILTRATI > 0.5) ---
+        // --- DiffBind per Lanceotron ---
         ch_diffbind_lance_prep = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
             .join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } )
@@ -214,7 +215,8 @@ workflow ATAC_CHIP_PIPELINE {
             }
             .collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        DIFFBIND_LANCE ( ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
+        // AGGIUNTO PREFISSO "lanceotron"
+        DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
         ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
     }
@@ -225,18 +227,18 @@ workflow ATAC_CHIP_PIPELINE {
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
         
-        // Profileplyr su Lanceotron: riceve il file BED dei picchi DIFFERENZIALI significativi da DiffBind
+        // Profileplyr su Lanceotron
         PROFILEPLYR_LANCE ( 
             DIFFBIND_LANCE.out.sig_bed.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "lanceotron"
         )
 
-        // Profileplyr su MACS3: riceve il file BED dei picchi DIFFERENZIALI significativi da DiffBind
+        // Profileplyr su MACS3
         PROFILEPLYR_MACS ( 
             DIFFBIND_MACS.out.sig_bed.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
-            "macs"
+            "macs3"
         )
 
         ch_profileplyr_mqc = PROFILEPLYR_LANCE.out.mqc_html
