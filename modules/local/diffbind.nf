@@ -4,6 +4,7 @@ process DIFFBIND {
     container 'quay.io/biocontainers/bioconductor-diffbind:3.20.0--r45ha27e39d_0'
 
     input:
+    val prefix      // <--- Parametro aggiunto per differenziare MACS3 da Lanceotron
     path samplesheet
     path bams
     path bais
@@ -13,9 +14,9 @@ process DIFFBIND {
     path "*.pdf"                       , emit: pdf, optional: true
     path "*.csv"                       , emit: csv, optional: true
     path "*_mqc.html"                  , emit: mqc_html, optional: true
-    path "diffbind_correlation_mqc.txt", emit: mqc_txt, optional: true
+    path "*_correlation_mqc.txt"       , emit: mqc_txt, optional: true
     path "*.png"                       , emit: png, optional: true
-    path "diffbind_sig_peaks.bed"      , emit: sig_bed, optional: true 
+    path "*_sig_peaks.bed"             , emit: sig_bed, optional: true 
     path "versions.yml"                , emit: versions
 
     script:
@@ -44,35 +45,35 @@ process DIFFBIND {
         db_obj <- dba(db_obj, mask=keep_mask)
     }
 
-    png("diffbind_correlation.png", width=1000, height=1000, res=150)
+    # --- Aggiunto prefisso a tutti i file ---
+    png("${prefix}_diffbind_correlation.png", width=1000, height=1000, res=150)
     plot(db_obj, margin=20)
     dev.off()
 
-    img_corr_64 <- base64encode("diffbind_correlation.png")
+    img_corr_64 <- base64encode("${prefix}_diffbind_correlation.png")
     
     cat(paste0(
         "\\n",
         "<div style='text-align: center; padding: 20px;'>\\n",
         "  <img src='data:image/png;base64,", img_corr_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
         "</div>"
-    ), file="diffbind_corr_mqc.html")
+    ), file="${prefix}_diffbind_corr_mqc.html")
 
-    # 1. CONTEGGIO DEI READ SUI PICCHI (Risolto il bug di memoria di R impostando FALSE)
+    # 1. CONTEGGIO DEI READ SUI PICCHI
     db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=FALSE)
 
-    # === NUOVO: ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
+    # === ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
     try({
-        # Estrae i conteggi normalizzati (RPKM/TMM) per tutti i campioni
         counts_data <- dba.peakset(db_obj, bRetrieve=TRUE)
         if (!is.null(counts_data)) {
-            write.csv(as.data.frame(counts_data), "diffbind_counts_matrix.csv", row.names=FALSE)
+            write.csv(as.data.frame(counts_data), "${prefix}_diffbind_counts_matrix.csv", row.names=FALSE)
         }
     }, silent=FALSE) 
     # =======================================================================
 
     try({
         cor_matrix <- dba.overlap(db_obj, mode=DBA_OL_COR)
-        write.table(cor_matrix, file="diffbind_correlation_mqc.txt", sep="\t", quote=FALSE, col.names=NA)
+        write.table(cor_matrix, file="${prefix}_diffbind_correlation_mqc.txt", sep="\t", quote=FALSE, col.names=NA)
     }, silent=TRUE)
 
     analysis_status <- try({
@@ -82,39 +83,38 @@ process DIFFBIND {
     }, silent=TRUE)
 
     # Inizializziamo un file vuoto di sicurezza se non ci fossero picchi significativi
-    file.create("diffbind_sig_peaks.bed")
+    file.create("${prefix}_diffbind_sig_peaks.bed")
 
     if (!inherits(analysis_status, "try-error") && !is.null(db_obj\$contrasts)) {
         res_db <- dba.report(db_obj)
         
         if(!is.null(res_db)) {
-            write.csv(as.data.frame(res_db), "diff_bind_results.csv")
+            write.csv(as.data.frame(res_db), "${prefix}_diff_bind_results.csv")
 
             # ESTRAZIONE E SCRITTURA DELLA MATRICE FILTRATA IN BED PER PROFILEPLYR
             if(length(res_db) > 0) {
                 df_sig <- as.data.frame(res_db)
-                # Creiamo un formato BED standard (chr, start, end, name, score)
                 bed_sig <- df_sig[, c("seqnames", "start", "end")]
                 bed_sig\$name <- paste0("DB_site_", 1:nrow(bed_sig))
                 bed_sig\$score <- df_sig\$FDR
-                write.table(bed_sig, "diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
+                write.table(bed_sig, "${prefix}_diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
             }
         }
 
         # Generazione PCA solo se l'analisi differenziale ha prodotto risultati
         try({
-            png("diffbind_pca.png", width=1000, height=800, res=150)
+            png("${prefix}_diffbind_pca.png", width=1000, height=800, res=150)
             dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
             dev.off()
 
-            img_pca_64 <- base64encode("diffbind_pca.png")
+            img_pca_64 <- base64encode("${prefix}_diffbind_pca.png")
             
             cat(paste0(
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <img src='data:image/png;base64,", img_pca_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
                 "</div>"
-            ), file="diffbind_pca_mqc.html")
+            ), file="${prefix}_diffbind_pca_mqc.html")
         }, silent=TRUE)
     }
 
