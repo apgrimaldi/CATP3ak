@@ -9,9 +9,9 @@ process PROFILEPLYR {
     val label
 
     output:
-    path "*.pdf"                       , emit: pdf, optional: true
-    path "*.png"                       , emit: png, optional: true
-    path "profileplyr_mqc.html"        , emit: mqc_html, optional: true
+    path "*_profile_heatmap.pdf"       , emit: pdf, optional: true
+    path "*_profile_heatmap.png"       , emit: png, optional: true
+    path "*_profileplyr_mqc.html"      , emit: mqc_html, optional: true
     path "versions.yml"                , emit: versions
 
     script:
@@ -59,20 +59,18 @@ process PROFILEPLYR {
             "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
             "  <p style='color: #cc0000;'>Nessun picco valido trovato come input. Heatmap non generata.</p>\\n",
             "</div>"
-        ), file="profileplyr_mqc.html")
+        ), file="${label}_profileplyr_mqc.html")
         
-        file.create("profile_heatmap.png")
-        file.create("profile_heatmap.pdf")
+        file.create("${label}_profile_heatmap.png")
+        file.create("${label}_profile_heatmap.pdf")
     } else {
         
         # 2. Creazione corretta dell'oggetto Profileplyr per BigWig
-        # Creiamo il metadata corretto per i campioni
         sample_info <- data.frame(
-            sample_id = sampleNames <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files)),
+            sample_id = sub("\\\\.(bw|bigWig)\$", "", basename(bw_files)),
             row.names = basename(bw_files)
         )
 
-        # Usiamo la funzione nativa corretta del pacchetto
         pro_obj <- BamBigWig_to_profileplyr(
             bigWigFiles = bw_files,
             testRanges = peaks_gr,
@@ -81,37 +79,39 @@ process PROFILEPLYR {
             sampleData = sample_info
         )
 
-        # 3. Generazione e salvataggio Heatmap grafica
+        # 3. Generazione e salvataggio Heatmap grafica (Risolto bug Lazy Evaluation e X11)
         tryCatch({
-            png("profile_heatmap.png", width=1200, height=1400, res=150)
-            generateEnrichedHeatmap(pro_obj)
+            # type='cairo' garantisce la stabilità del plotting nei container Docker/Singularity
+            png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
+            ht <- generateEnrichedHeatmap(pro_obj)
+            print(ht) # <--- FIX: Forza R a disegnare effettivamente la heatmap sul device grafico
             dev.off()
 
-            pdf("profile_heatmap.pdf", width=8, height=10)
-            generateEnrichedHeatmap(pro_obj)
+            pdf("${label}_profile_heatmap.pdf", width=8, height=10)
+            print(ht) # <--- FIX: Forza il disegno anche sul report PDF
             dev.off()
 
             # 4. Preparazione HTML codificato in Base64 per MultiQC
-            img_64 <- base64encode("profile_heatmap.png")
+            img_64 <- base64encode("${label}_profile_heatmap.png")
             cat(paste0(
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <h3>Profile Analysis (", "${label}", ")</h3>\\n",
                 "  <img src='data:image/png;base64,", img_64, "' style='width: 600px; max-width: 100%; height: auto; border: 1px solid #ddd;'>\\n",
                 "</div>"
-            ), file="profileplyr_mqc.html")
+            ), file="${label}_profileplyr_mqc.html")
 
         }, error = function(e) {
-            # Se la generazione del grafico fallisce per motivi matematici, salva un log d'errore pulito
+            # In caso di errore matematico/grafico scrive un alert pulito per MultiQC anziché far crashare Nextflow
             cat(paste0(
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
                 "  <p>Errore durante il plotting: ", e\$message, "</p>\\n",
                 "</div>"
-            ), file="profileplyr_mqc.html")
-            file.create("profile_heatmap.png")
-            file.create("profile_heatmap.pdf")
+            ), file="${label}_profileplyr_mqc.html")
+            file.create("${label}_profile_heatmap.png")
+            file.create("${label}_profile_heatmap.pdf")
         })
     }
 
