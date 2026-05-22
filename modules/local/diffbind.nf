@@ -57,8 +57,8 @@ process DIFFBIND {
         "</div>"
     ), file="diffbind_corr_mqc.html")
 
-    # 1. CONTEGGIO DEI READ SUI PICCHI
-    db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=TRUE)
+    # 1. CONTEGGIO DEI READ SUI PICCHI (Risolto il bug di memoria di R impostando FALSE)
+    db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=FALSE)
 
     # === NUOVO: ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
     try({
@@ -67,7 +67,7 @@ process DIFFBIND {
         if (!is.null(counts_data)) {
             write.csv(as.data.frame(counts_data), "diffbind_counts_matrix.csv", row.names=FALSE)
         }
-    }, silent=FALSE) # Messo a FALSE per vedere eventuali errori nel log se fallisce
+    }, silent=FALSE) 
     # =======================================================================
 
     try({
