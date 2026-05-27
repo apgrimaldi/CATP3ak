@@ -222,21 +222,21 @@ workflow ATAC_CHIP_PIPELINE {
     }
 
     // =========================================================================
-    // GENERAZIONE HEATMAPS PROFILEPLYR (SDOPPIATA SUI PICCHI DIFFERENZIALI)
+    // GENERAZIONE HEATMAPS PROFILEPLYR (SUI TUTTI I PICCHI FILTRATI)
     // =========================================================================
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
         
-        // Profileplyr su Lanceotron
+        // Profileplyr su Lanceotron: usa i picchi filtrati invece dei picchi differenziali
         PROFILEPLYR_LANCE ( 
-            DIFFBIND_LANCE.out.sig_bed.collect(), 
+            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "lanceotron"
         )
 
-        // Profileplyr su MACS3
+        // Profileplyr su MACS3: usa i picchi narrow grezzi invece dei picchi differenziali
         PROFILEPLYR_MACS ( 
-            DIFFBIND_MACS.out.sig_bed.collect(), 
+            ch_narrow_peaks.map{ it[1] }.collect(), 
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
             "macs3"
         )
@@ -261,6 +261,12 @@ workflow ATAC_CHIP_PIPELINE {
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
     
+    // Mix dei log di picchi grezzi e picchi filtrati di Lanceotron per MultiQC
+    ch_lance_combined_mqc = LANCEOTRON.out.counts_mqc.map{ it[1] }
+        .mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] })
+        .collect()
+        .ifEmpty([])
+
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         ch_summary_mqc,
@@ -276,7 +282,7 @@ workflow ATAC_CHIP_PIPELINE {
         ch_all_homer_mqc,
         ch_all_diffbind_mqc,
         ch_profileplyr_mqc,
-        LANCEOTRON.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]),
+        ch_lance_combined_mqc, // Inserimento del canale combinato
         ch_versions_mqc
     )
 }
