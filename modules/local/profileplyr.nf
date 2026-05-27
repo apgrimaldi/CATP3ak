@@ -66,29 +66,34 @@ process PROFILEPLYR {
     } else {
         
         # 2. Creazione corretta dell'oggetto Profileplyr per BigWig
-        sample_info <- data.frame(
-            sample_id = sub("\\\\.(bw|bigWig)\$", "", basename(bw_files)),
-            row.names = basename(bw_files)
+        # Esportiamo i picchi uniti su file BED temporaneo (BamBigwig_to_chipProfile lo richiede fisicamente)
+        rtracklayer::export(peaks_gr, "merged_testRanges.bed")
+
+        # Usiamo la VERA funzione del pacchetto per leggere i file BigWig
+        pro_chip <- BamBigwig_to_chipProfile(
+            signalFiles = bw_files,
+            testRanges = "merged_testRanges.bed",
+            format = "bigwig",
+            style = "point",
+            bin_size = 50,
+            distanceAround = 2000
         )
 
-        pro_obj <- BamBigWig_to_profileplyr(
-            bigWigFiles = bw_files,
-            testRanges = peaks_gr,
-            binSize = 50,
-            distanceAround = 2000,
-            sampleData = sample_info
-        )
+        # Convertiamo l'output nell'oggetto profileplyr standard
+        pro_obj <- as_profileplyr(pro_chip)
 
-        # 3. Generazione e salvataggio Heatmap grafica (Risolto bug Lazy Evaluation e X11)
+        # Pulizia dei nomi dei campioni per la legenda
+        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
+
+        # 3. Generazione e salvataggio Heatmap grafica
         tryCatch({
-            # type='cairo' garantisce la stabilità del plotting nei container Docker/Singularity
             png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
             ht <- generateEnrichedHeatmap(pro_obj)
-            print(ht) # <--- FIX: Forza R a disegnare effettivamente la heatmap sul device grafico
+            print(ht)
             dev.off()
 
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
-            print(ht) # <--- FIX: Forza il disegno anche sul report PDF
+            print(ht)
             dev.off()
 
             # 4. Preparazione HTML codificato in Base64 per MultiQC
@@ -102,7 +107,6 @@ process PROFILEPLYR {
             ), file="${label}_profileplyr_mqc.html")
 
         }, error = function(e) {
-            # In caso di errore matematico/grafico scrive un alert pulito per MultiQC anziché far crashare Nextflow
             cat(paste0(
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
