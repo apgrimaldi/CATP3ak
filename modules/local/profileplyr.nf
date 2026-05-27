@@ -65,8 +65,17 @@ process PROFILEPLYR {
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
+        # --- FIX OOM (Errore 137): Limitiamo ai Top 15.000 picchi ---
+        if (length(peaks_gr) > 15000) {
+            print(paste("Trovati", length(peaks_gr), "picchi. Limito ai top 15.000 per prevenire saturazione RAM e pulire il grafico."))
+            if (!is.null(mcols(peaks_gr)\$score)) {
+                peaks_gr <- peaks_gr[order(mcols(peaks_gr)\$score, decreasing = TRUE)]
+            }
+            peaks_gr <- head(peaks_gr, 15000)
+        }
+
         # 2. Creazione corretta dell'oggetto Profileplyr per BigWig
-        # Esportiamo i picchi uniti su file BED temporaneo (BamBigwig_to_chipProfile lo richiede fisicamente)
+        # Esportiamo i picchi uniti su file BED temporaneo
         rtracklayer::export(peaks_gr, "merged_testRanges.bed")
 
         # Usiamo la VERA funzione del pacchetto per leggere i file BigWig
@@ -85,9 +94,9 @@ process PROFILEPLYR {
         # Pulizia dei nomi dei campioni per la legenda
         sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
-        # 3. Generazione e salvataggio Heatmap grafica
+        # 3. Generazione e salvataggio Heatmap grafica (SENZA CAIRO!)
         tryCatch({
-            png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
+            png("${label}_profile_heatmap.png", width=1200, height=1400, res=150)
             ht <- generateEnrichedHeatmap(pro_obj)
             print(ht)
             dev.off()
