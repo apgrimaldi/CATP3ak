@@ -162,13 +162,11 @@ workflow ATAC_CHIP_PIPELINE {
     ch_homer_lance_mqc = Channel.empty()
 
     if (!params.skip_homer && reference_file && gtf_file) {
-        // Annotazione MACS3 (Narrow + Broad) - AGGIUNTO PREFISSO "macs3"
         ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks)
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
         ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
 
-        // Annotazione Lanceotron (Usa unicamente i picchi FILTRATI > 0.5) - AGGIUNTO PREFISSO "lanceotron"
         ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks
             .filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
@@ -196,7 +194,6 @@ workflow ATAC_CHIP_PIPELINE {
             }
             .collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        // AGGIUNTO PREFISSO "macs3"
         DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
@@ -215,30 +212,31 @@ workflow ATAC_CHIP_PIPELINE {
             }
             .collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
 
-        // AGGIUNTO PREFISSO "lanceotron"
         DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
         ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
     }
 
     // =========================================================================
-    // GENERAZIONE HEATMAPS PROFILEPLYR (SUI TUTTI I PICCHI FILTRATI)
+    // GENERAZIONE HEATMAPS PROFILEPLYR (CON FALLBACK AUTOMATICO: DiffBind -> Raw)
     // =========================================================================
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
         
-        // Profileplyr su Lanceotron: usa i picchi filtrati invece dei picchi differenziali
+        // Profileplyr su Lanceotron
         PROFILEPLYR_LANCE ( 
-            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), 
-            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
-            "lanceotron"
+            DIFFBIND_LANCE.out.sig_bed.collect().ifEmpty([]),            // [INPUT 1] I picchi DiffBind
+            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), // [INPUT 2] Il Fallback (picchi filtrati)
+            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
+            "lanceotron"                                                 // [INPUT 4] Label
         )
 
-        // Profileplyr su MACS3: usa i picchi narrow grezzi invece dei picchi differenziali
+        // Profileplyr su MACS3
         PROFILEPLYR_MACS ( 
-            ch_narrow_peaks.map{ it[1] }.collect(), 
-            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),
-            "macs3"
+            DIFFBIND_MACS.out.sig_bed.collect().ifEmpty([]),             // [INPUT 1] I picchi DiffBind
+            ch_narrow_peaks.map{ it[1] }.collect(),                      // [INPUT 2] Il Fallback (picchi grezzi)
+            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
+            "macs3"                                                      // [INPUT 4] Label
         )
 
         ch_profileplyr_mqc = PROFILEPLYR_LANCE.out.mqc_html
