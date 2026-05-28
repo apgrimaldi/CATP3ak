@@ -9,7 +9,7 @@ process PROFILEPLYR {
     path(diff_peaks, stageAs: 'diff_peaks/*') // [INPUT 1] I picchi di DiffBind
     path(raw_peaks,  stageAs: 'raw_peaks/*')  // [INPUT 2] I picchi grezzi (il piano B)
     path(bigwigs,    stageAs: 'bigwigs/*')    // [INPUT 3] I BigWig
-    val label                                 // [INPUT 4] Label ("macs3" o "lanceotron")
+    val label                                 // [INPUT 4] Label
 
     output:
     path "*_profile_heatmap.pdf"       , emit: pdf, optional: true
@@ -25,10 +25,6 @@ process PROFILEPLYR {
     library(rtracklayer)
     library(GenomicRanges)
     library(ComplexHeatmap)
-
-    # IL FIX DEFINITIVO PER IL CRASH "CAIRO": 
-    # Impedisce a R di tentare la compressione dell'immagine quando i picchi sono migliaia.
-    ht_opt(use_raster = FALSE)
 
     print(paste("Analisi Profileplyr:", "${label}"))
 
@@ -106,16 +102,16 @@ process PROFILEPLYR {
         pro_obj <- as_profileplyr(pro_chip)
         sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
-        # 3. Plotting (Con Cairo!)
+        # 3. Plotting (Con disattivazione della rasterizzazione passata al posto giusto!)
         tryCatch({
-            ht <- generateEnrichedHeatmap(pro_obj)
+            ht <- generateEnrichedHeatmap(pro_obj, use_raster = FALSE)
             
             # PDF ad alta risoluzione
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
             print(ht)
             dev.off()
 
-            # PNG per MultiQC (Usa CAIRO come avevi chiesto)
+            # PNG per MultiQC (Usa CAIRO come avevi chiesto, col salvavita in caso di fail)
             png_success <- FALSE
             tryCatch({
                 png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
@@ -123,7 +119,6 @@ process PROFILEPLYR {
                 dev.off()
                 png_success <- TRUE
             }, error = function(e_cairo) {
-                # Se Cairo fallisce per qualsiasi motivo, prova senza per non crashare
                 tryCatch({
                     png("${label}_profile_heatmap.png", width=1200, height=1400, res=150)
                     print(ht)
