@@ -6,9 +6,8 @@ process PROFILEPLYR {
     publishDir "results/profile_heatmaps", mode: 'copy'
 
     input:
-    path(diff_peaks, stageAs: 'diff_peaks/*') // I picchi di DiffBind
-    path(raw_peaks,  stageAs: 'raw_peaks/*')  // I picchi grezzi (il piano B)
-    path(bigwigs,    stageAs: 'bigwigs/*')    // I BigWig
+    path peaks
+    path bigwigs
     val label
 
     output:
@@ -24,68 +23,55 @@ process PROFILEPLYR {
     library(base64enc)
     library(rtracklayer)
     library(GenomicRanges)
+    library(ComplexHeatmap)
 
-    print(paste("Analisi Profileplyr:", "${label}"))
+    # IL SEGRETO È QUI: Disattiviamo la compressione (rasterizzazione) 
+    # che mandava in crash il sistema cercando il pacchetto Cairo quando i picchi erano migliaia.
+    ht_opt(use_raster = FALSE)
 
-    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
-    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
-    bw_files   <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
+    print(paste("Forzatura grafica Profileplyr per:", "${label}"))
 
-    # Funzione per caricare e unire i picchi
+    peak_files <- list.files(pattern = "\\\\.(bed|narrowPeak|broadPeak)\$")
+    bw_files <- list.files(pattern = "\\\\.(bw|bigWig)\$")
+
     import_and_merge_peaks <- function(files) {
-        if (length(files) == 0) return(NULL)
         gr_list <- lapply(files, function(f) {
             tryCatch({
                 gr <- rtracklayer::import(f)
-                if (!is.null(mcols(gr)\$score)) mcols(gr)\$score <- as.numeric(mcols(gr)\$score)
                 return(gr)
             }, error = function(e) NULL)
         })
         gr_list <- gr_list[!sapply(gr_list, is.null)]
         if (length(gr_list) == 0) return(NULL)
-        all_peaks <- do.call(c, gr_list)
-        return(all_peaks)
+        return(do.call(c, gr_list))
     }
 
-    # ---- LOGICA FALLBACK AUTOMATICO ----
-    peaks_gr <- import_and_merge_peaks(diff_files)
-    used_mode <- "Picchi Differenziali (DiffBind)"
-
-    if (is.null(peaks_gr) || length(peaks_gr) < 3) {
-        print("Picchi differenziali insufficienti o assenti. Attivo il FALLBACK sui picchi totali/grezzi.")
-        peaks_gr <- import_and_merge_peaks(raw_files)
-        used_mode <- "Picchi Totali/Grezzi (Fallback)"
-    } else {
-        print("Picchi differenziali trovati! Utilizzo i risultati di DiffBind.")
-    }
-    # ------------------------------------
+    peaks_gr <- import_and_merge_peaks(peak_files)
 
     if (is.null(peaks_gr) || length(peaks_gr) < 3) {
         cat(paste0(
             "\\n",
             "<div style='text-align: center; padding: 20px; border: 1px solid #cc0000;'>\\n",
             "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
-            "  <p style='color: #cc0000;'>Nessun picco valido trovato come input. Heatmap non generata.</p>\\n",
+            "  <p style='color: #cc0000;'>Nessun picco per generare il grafico.</p>\\n",
             "</div>"
         ), file="${label}_profileplyr_mqc.html")
-        
         file.create("${label}_profile_heatmap.png")
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
-        # ORDINA PER SCORE
-        if (!is.null(mcols(peaks_gr)\$score)) {
-            peaks_gr <- peaks_gr[order(mcols(peaks_gr)\$score, decreasing = TRUE)]
+        # BRUTE FORCE 1: Mescolamento casuale per evitare bias sul Cromosoma 1
+        set.seed(123)
+        peaks_gr <- peaks_gr[sample(length(peaks_gr))]
+
+        # BRUTE FORCE 2: Salvataggio RAM. Massimo 10.000 picchi.
+        if (length(peaks_gr) > 10000) {
+            peaks_gr <- head(peaks_gr, 10000)
         }
 
-        # FIX RAM: Limita a 15.000 picchi
-        if (length(peaks_gr) > 15000) {
-            peaks_gr <- head(peaks_gr, 15000)
-        }
+        # BRUTE FORCE 3: Centraggio assoluto a 1 base per forzare l'allineamento
+        peaks_gr <- GenomicRanges::resize(peaks_gr, width = 1, fix = "center")
 
-        peaks_gr <- GenomicRanges::reduce(peaks_gr)
-
-        # 2. Creazione oggetto Profileplyr
         rtracklayer::export(peaks_gr, "merged_testRanges.bed")
 
         pro_chip <- BamBigwig_to_chipProfile(
@@ -100,51 +86,34 @@ process PROFILEPLYR {
         pro_obj <- as_profileplyr(pro_chip)
         sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
-        # 3. Plotting con paracadute
         tryCatch({
             ht <- generateEnrichedHeatmap(pro_obj)
             
+            # Crea il PDF (Alta risoluzione)
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
             print(ht)
             dev.off()
 
-            png_success <- FALSE
-            tryCatch({
-                png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
-                print(ht)
-                dev.off()
-                png_success <- TRUE
-            }, error = function(e_cairo) {
-                tryCatch({
-                    png("${label}_profile_heatmap.png", width=1200, height=1400, res=150)
-                    print(ht)
-                    dev.off()
-                    png_success <- TRUE
-                }, error = function(e_nocairo) {
-                    png_success <- FALSE
-                })
-            })
+            # Crea il PNG con il comando che sappiamo funzionare per MACS3
+            png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
+            print(ht)
+            dev.off()
 
-            if (png_success) {
-                img_64 <- base64encode("${label}_profile_heatmap.png")
-                cat(paste0(
-                    "\\n",
-                    "<div style='text-align: center; padding: 20px;'>\\n",
-                    "  <h3>Profile Analysis (", "${label}", ")</h3>\\n",
-                    "  <p><strong>Modalità usata: </strong> ", used_mode, "</p>\\n",
-                    "  <img src='data:image/png;base64,", img_64, "' style='width: 600px; max-width: 100%; height: auto; border: 1px solid #ddd;'>\\n",
-                    "</div>"
-                ), file="${label}_profileplyr_mqc.html")
-            } else {
-                stop("Impossibile generare il PNG.")
-            }
+            img_64 <- base64encode("${label}_profile_heatmap.png")
+            cat(paste0(
+                "\\n",
+                "<div style='text-align: center; padding: 20px;'>\\n",
+                "  <h3>Profile Analysis (", "${label}", ")</h3>\\n",
+                "  <img src='data:image/png;base64,", img_64, "' style='width: 600px; max-width: 100%; height: auto; border: 1px solid #ddd;'>\\n",
+                "</div>"
+            ), file="${label}_profileplyr_mqc.html")
 
         }, error = function(e) {
             cat(paste0(
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
-                "  <p>Errore durante il plotting: ", e\$message, "</p>\\n",
+                "  <p>Errore di rendering R: ", e\$message, "</p>\\n",
                 "</div>"
             ), file="${label}_profileplyr_mqc.html")
             file.create("${label}_profile_heatmap.png")
@@ -154,8 +123,7 @@ process PROFILEPLYR {
 
     writeLines(c(
         "\\"${task.process}\\":",
-        paste0("    profileplyr: ", packageVersion("profileplyr")),
-        paste0("    rtracklayer: ", packageVersion("rtracklayer"))
+        paste0("    profileplyr: ", packageVersion("profileplyr"))
     ), "versions.yml")
     """
 }
