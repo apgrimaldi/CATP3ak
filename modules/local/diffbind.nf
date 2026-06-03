@@ -1,10 +1,10 @@
-process DIFFBIND {
-    tag "diffbind_analysis"
+process DIFFBIND_LANCE {
+    tag "diffbind_analysis_lanceotron"
     label 'process_high'
     container 'quay.io/biocontainers/bioconductor-diffbind:3.20.0--r45ha27e39d_0'
 
     input:
-    val prefix      // <--- Parametro aggiunto per differenziare MACS3 da Lanceotron
+    val prefix
     path samplesheet
     path bams
     path bais
@@ -45,7 +45,6 @@ process DIFFBIND {
         db_obj <- dba(db_obj, mask=keep_mask)
     }
 
-    # --- Aggiunto prefisso a tutti i file ---
     png("${prefix}_diffbind_correlation.png", width=1000, height=1000, res=150)
     plot(db_obj, margin=20)
     dev.off()
@@ -59,20 +58,15 @@ process DIFFBIND {
         "</div>"
     ), file="${prefix}_diffbind_corr_mqc.html")
 
-    # 1. DISATTIVAZIONE BLACKLIST E CONTEGGIO PULITO
-    # Disattiviamo il controllo automatico per evitare il bug di GenomeInfoDb,
-    # dato che i dati sono già stati filtrati accuratamente a monte della pipeline.
     db_obj <- dba.blacklist(db_obj, blacklist=FALSE, greylist=FALSE)
     db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=FALSE)
 
-    # === ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
     try({
         counts_data <- dba.peakset(db_obj, bRetrieve=TRUE)
         if (!is.null(counts_data)) {
             write.csv(as.data.frame(counts_data), "${prefix}_diffbind_counts_matrix.csv", row.names=FALSE)
         }
     }, silent=FALSE) 
-    # =======================================================================
 
     try({
         cor_matrix <- dba.overlap(db_obj, mode=DBA_OL_COR)
@@ -81,15 +75,10 @@ process DIFFBIND {
 
     analysis_status <- try({
         contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
-        
-        # [PROVA DEL NOVE] Ripristinato a 2 per verificare la reale riproducibilità biologica
         db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
-        
-        # [FIX DESEQ2] Forziamo esplicitamente l'uso di DESeq2
         db_obj <- dba.analyze(db_obj, method=DBA_DESEQ2)
     }, silent=TRUE)
 
-    # Inizializziamo un file vuoto di sicurezza se non ci fossero picchi significativi
     file.create("${prefix}_diffbind_sig_peaks.bed")
 
     if (!inherits(analysis_status, "try-error") && !is.null(db_obj\$contrasts)) {
@@ -98,7 +87,6 @@ process DIFFBIND {
         if(!is.null(res_db)) {
             write.csv(as.data.frame(res_db), "${prefix}_diff_bind_results.csv")
 
-            # ESTRAZIONE E SCRITTURA DELLA MATRICE FILTRATA IN BED PER PROFILEPLYR
             if(length(res_db) > 0) {
                 df_sig <- as.data.frame(res_db)
                 bed_sig <- df_sig[, c("seqnames", "start", "end")]
@@ -108,7 +96,6 @@ process DIFFBIND {
             }
         }
 
-        # Generazione PCA solo se l'analisi differenziale ha prodotto risultati
         try({
             png("${prefix}_diffbind_pca.png", width=1000, height=800, res=150)
             dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
