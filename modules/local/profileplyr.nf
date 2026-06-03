@@ -6,10 +6,10 @@ process PROFILEPLYR {
     publishDir "results/profile_heatmaps", mode: 'copy'
 
     input:
-    path(diff_peaks, stageAs: 'diff_peaks/*') // [INPUT 1] I picchi di DiffBind
-    path(raw_peaks,  stageAs: 'raw_peaks/*')  // [INPUT 2] I picchi grezzi (il piano B)
-    path(bigwigs,    stageAs: 'bigwigs/*')    // [INPUT 3] I BigWig
-    val label                                 // [INPUT 4] Label
+    path(diff_peaks, stageAs: 'diff_peaks/*')
+    path(raw_peaks,  stageAs: 'raw_peaks/*')
+    path(bigwigs,    stageAs: 'bigwigs/*')
+    val label
 
     output:
     path "*_profile_heatmap.pdf"       , emit: pdf, optional: true
@@ -32,7 +32,6 @@ process PROFILEPLYR {
     raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     bw_files   <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
 
-    # Funzione per caricare e unire i picchi
     import_and_merge_peaks <- function(files) {
         if (length(files) == 0) return(NULL)
         gr_list <- lapply(files, function(f) {
@@ -48,18 +47,13 @@ process PROFILEPLYR {
         return(all_peaks)
     }
 
-    # ---- LOGICA FALLBACK AUTOMATICO ----
     peaks_gr <- import_and_merge_peaks(diff_files)
     used_mode <- "Picchi Differenziali (DiffBind)"
 
     if (is.null(peaks_gr) || length(peaks_gr) < 3) {
-        print("Picchi differenziali insufficienti o assenti. Attivo il FALLBACK sui picchi totali/grezzi.")
         peaks_gr <- import_and_merge_peaks(raw_files)
         used_mode <- "Picchi Totali/Grezzi (Fallback)"
-    } else {
-        print("Picchi differenziali trovati! Utilizzo i risultati di DiffBind.")
-    }
-    # ------------------------------------
+    } 
 
     if (is.null(peaks_gr) || length(peaks_gr) < 3) {
         cat(paste0(
@@ -74,20 +68,16 @@ process PROFILEPLYR {
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
-        # Ordinamento per score (i migliori in alto)
         if (!is.null(mcols(peaks_gr)\$score)) {
             peaks_gr <- peaks_gr[order(mcols(peaks_gr)\$score, decreasing = TRUE)]
         }
 
-        # FIX RAM: Limita a 15.000 picchi per non far esplodere la memoria
         if (length(peaks_gr) > 15000) {
             peaks_gr <- head(peaks_gr, 15000)
         }
 
-        # Fusione picchi sovrapposti
         peaks_gr <- GenomicRanges::reduce(peaks_gr)
 
-        # 2. Creazione oggetto Profileplyr
         rtracklayer::export(peaks_gr, "merged_testRanges.bed")
 
         pro_chip <- BamBigwig_to_chipProfile(
@@ -102,16 +92,13 @@ process PROFILEPLYR {
         pro_obj <- as_profileplyr(pro_chip)
         sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
-        # 3. Plotting (Con disattivazione della rasterizzazione passata al posto giusto!)
         tryCatch({
             ht <- generateEnrichedHeatmap(pro_obj, use_raster = FALSE)
             
-            # PDF ad alta risoluzione
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
             print(ht)
             dev.off()
 
-            # PNG per MultiQC (Usa CAIRO come avevi chiesto, col salvavita in caso di fail)
             png_success <- FALSE
             tryCatch({
                 png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
