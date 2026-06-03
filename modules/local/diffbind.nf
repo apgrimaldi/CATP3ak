@@ -75,7 +75,7 @@ process DIFFBIND {
 
     analysis_status <- try({
         contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
-        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
+        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=1)
         db_obj <- dba.analyze(db_obj, method=DBA_DESEQ2)
     }, silent=TRUE)
 
