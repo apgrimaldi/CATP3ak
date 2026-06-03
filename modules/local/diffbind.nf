@@ -1,4 +1,4 @@
-process DIFFBIND_LANCE {
+process DIFFBIND {
     tag "diffbind_analysis_lanceotron"
     label 'process_high'
     container 'quay.io/biocontainers/bioconductor-diffbind:3.20.0--r45ha27e39d_0'
