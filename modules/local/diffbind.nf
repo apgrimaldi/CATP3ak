@@ -59,14 +59,11 @@ process DIFFBIND {
         "</div>"
     ), file="${prefix}_diffbind_corr_mqc.html")
 
-    # 1. CONTEGGIO DEI READ SUI PICCHI (FIX BLACKLIST)
-    # Aggiunto tryCatch per evitare che il fallimento di GenomeInfoDb faccia crashare lo script
-    tryCatch({
-        db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=FALSE)
-    }, error = function(e) {
-        print(paste("Errore nel conteggio iniziale, tento il fallback:", e\$message))
-        db_obj <<- dba.count(db_obj, bParallel=FALSE, bUseSummarizeOverlaps=FALSE)
-    })
+    # 1. DISATTIVAZIONE BLACKLIST E CONTEGGIO PULITO
+    # Disattiviamo il controllo automatico per evitare il bug di GenomeInfoDb,
+    # dato che i dati sono già stati filtrati accuratamente a monte della pipeline.
+    db_obj <- dba.blacklist(db_obj, blacklist=FALSE, greylist=FALSE)
+    db_obj <- dba.count(db_obj, bParallel=TRUE, bUseSummarizeOverlaps=FALSE)
 
     # === ESTRAZIONE E SALVATAGGIO MATRICE DEI CONTEGGI NORMALIZZATI ===
     try({
@@ -85,8 +82,8 @@ process DIFFBIND {
     analysis_status <- try({
         contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
         
-        # [TEST DIAGNOSTICO] Abbassato minMembers a 1 per salvare i campioni con bassa sovrapposizione
-        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=1)
+        # [PROVA DEL NOVE] Ripristinato a 2 per verificare la reale riproducibilità biologica
+        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
         
         # [FIX DESEQ2] Forziamo esplicitamente l'uso di DESeq2
         db_obj <- dba.analyze(db_obj, method=DBA_DESEQ2)
