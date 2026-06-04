@@ -37,15 +37,20 @@ workflow {
     }
 
     log.info """
-    ===========================================
-    A T A C / C H I P   P I P E L I N E
+    ================================================================
+    ${cyan}  ___  _  _____ ___  ____  _  __ ${reset}
+    ${cyan} / __|/_\_   _| _ \|__ / / |/ / ${reset}
+    ${cyan}| (__/ _ \| | |  __/ |_ \ | ' <  ${reset}
+    ${cyan} \___\_/ \_\_| |_|  |___/ |_|\_\ ${reset}
+    ================================================================
+         C A T P 3 A K   P I P E L I N E
     ===========================================
     Protocol      : ${params.protocol?.toUpperCase()}
     Genome        : ${params.genome}
     Input         : ${params.input}
     Output        : ${params.outdir}
     ===========================================
-    """
+    """.stripIndent()
 
     ch_input = Channel
         .fromPath(params.input, checkIfExists: true)
