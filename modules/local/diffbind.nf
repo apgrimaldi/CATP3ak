@@ -37,6 +37,10 @@ process DIFFBIND {
         samples\$bamControl <- basename(as.character(samples\$bamControl))
     }
 
+    if ("antibody" %in% colnames(samples)) {
+        colnames(samples)[colnames(samples) == "antibody"] <- "Factor"
+    }
+
     db_obj <- dba(sampleSheet=samples)
     
     sample_info <- dba.show(db_obj)
@@ -66,27 +70,21 @@ process DIFFBIND {
         if (!is.null(counts_data)) {
             write.csv(as.data.frame(counts_data), "${prefix}_diffbind_counts_matrix.csv", row.names=FALSE)
         }
-    }, silent=FALSE) 
+    }, silent=TRUE) 
 
     try({
         cor_matrix <- dba.overlap(db_obj, mode=DBA_OL_COR)
         write.table(cor_matrix, file="${prefix}_diffbind_correlation_mqc.txt", sep="\t", quote=FALSE, col.names=NA)
     }, silent=TRUE)
 
-    contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
-    
-    # === SISTEMA A CASCATA (minMembers 2 -> 1) ===
     analysis_status <- tryCatch({
-        message("Tentativo 1: minMembers=2")
-        db_tmp <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
+        db_tmp <- dba.contrast(db_obj, categories=DBA_FACTOR, minMembers=2)
         dba.analyze(db_tmp, method=DBA_DESEQ2)
     }, error = function(e1) {
-        message("Fallito minMembers=2. Tentativo 2: minMembers=1")
         tryCatch({
-            db_tmp <- dba.contrast(db_obj, categories=contrast_category, minMembers=1)
+            db_tmp <- dba.contrast(db_obj, categories=DBA_FACTOR, minMembers=1)
             dba.analyze(db_tmp, method=DBA_DESEQ2)
         }, error = function(e2) {
-            message("Analisi fallita. Procedo senza risultati differenziali.")
             return(NULL)
         })
     })
@@ -109,7 +107,7 @@ process DIFFBIND {
 
             try({
                 png("${prefix}_diffbind_pca.png", width=1000, height=800, res=150)
-                dba.plotPCA(analysis_status, attributes=contrast_category, label=DBA_ID)
+                dba.plotPCA(analysis_status, attributes=DBA_FACTOR, label=DBA_ID)
                 dev.off()
 
                 img_pca_64 <- base64encode("${prefix}_diffbind_pca.png")
