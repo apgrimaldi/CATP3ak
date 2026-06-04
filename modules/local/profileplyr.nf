@@ -28,11 +28,11 @@ process PROFILEPLYR {
 
     print(paste("Analisi Profileplyr:", "${label}"))
 
-    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
-    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
+    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
+    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     
     # Prende TUTTI i file BigWig, senza cancellare gli Input (12 colonne totali)
-    bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\\$", full.names = TRUE)
+    bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
 
     import_and_merge_peaks <- function(files) {
         if (length(files) == 0) return(NULL)
@@ -92,7 +92,7 @@ process PROFILEPLYR {
         )
 
         pro_obj <- as_profileplyr(pro_chip)
-        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\\$", "", basename(bw_files))
+        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
         tryCatch({
             ht <- generateEnrichedHeatmap(pro_obj, 
