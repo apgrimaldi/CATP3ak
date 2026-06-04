@@ -27,7 +27,7 @@ process MULTIQC {
 
     script:
     def args = task.ext.args ?: ''
-    // Controllo difensiva: evita il flag se la configurazione è vuota
+    
     def config_opt = (multiqc_config && multiqc_config.name != 'empty_config' && multiqc_config.size() > 0) ? "--config $multiqc_config" : ''
     
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
