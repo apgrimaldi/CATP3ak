@@ -13,7 +13,7 @@ process FASTQC {
     path  "versions.yml"           , emit: versions
 
     script:
-    // Usiamo -t per sfruttare i core assegnati nel config
+
     """
     fastqc -t $task.cpus -q $reads
     
