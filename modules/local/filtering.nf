@@ -15,8 +15,7 @@ process FILTERING {
     script:
     def prefix = "${meta.id}"
     """
-    # 1. Gestione Blacklist: 
-    # Se il file è .gz lo decomprimiamo, altrimenti creiamo un link simbolico
+    # Blacklist: 
     if [[ "$blacklist" == *.gz ]]; then
         gunzip -c "$blacklist" > actual_blacklist.bed
     else
@@ -24,9 +23,7 @@ process FILTERING {
         ln -s $blacklist actual_blacklist.bed
     fi
 
-    # 2. Rimozione Blacklist con bedtools
-    # -v: 
-    # -abam: 
+     
     bedtools intersect \\
         -v \\
         -abam $bam \\
