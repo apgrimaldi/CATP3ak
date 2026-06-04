@@ -73,16 +73,28 @@ process DIFFBIND {
         write.table(cor_matrix, file="${prefix}_diffbind_correlation_mqc.txt", sep="\t", quote=FALSE, col.names=NA)
     }, silent=TRUE)
 
-    analysis_status <- try({
-        contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
-        db_obj <- dba.contrast(db_obj, categories=contrast_category, minMembers=1)
-        db_obj <- dba.analyze(db_obj, method=DBA_DESEQ2)
-    }, silent=TRUE)
+    contrast_category <- if ("Condition" %in% colnames(samples) && length(unique(samples\$Condition)) > 1) DBA_CONDITION else DBA_ANTIBODY
+    
+    # === SISTEMA A CASCATA (minMembers 2 -> 1) ===
+    analysis_status <- tryCatch({
+        message("Tentativo 1: minMembers=2")
+        db_tmp <- dba.contrast(db_obj, categories=contrast_category, minMembers=2)
+        dba.analyze(db_tmp, method=DBA_DESEQ2)
+    }, error = function(e1) {
+        message("Fallito minMembers=2. Tentativo 2: minMembers=1")
+        tryCatch({
+            db_tmp <- dba.contrast(db_obj, categories=contrast_category, minMembers=1)
+            dba.analyze(db_tmp, method=DBA_DESEQ2)
+        }, error = function(e2) {
+            message("Analisi fallita. Procedo senza risultati differenziali.")
+            return(NULL)
+        })
+    })
 
     file.create("${prefix}_diffbind_sig_peaks.bed")
 
-    if (!inherits(analysis_status, "try-error") && !is.null(db_obj\$contrasts)) {
-        res_db <- dba.report(db_obj)
+    if (!is.null(analysis_status) && !is.null(analysis_status\$contrasts)) {
+        res_db <- dba.report(analysis_status)
         
         if(!is.null(res_db)) {
             write.csv(as.data.frame(res_db), "${prefix}_diff_bind_results.csv")
@@ -94,22 +106,22 @@ process DIFFBIND {
                 bed_sig\$score <- df_sig\$FDR
                 write.table(bed_sig, "${prefix}_diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
             }
+
+            try({
+                png("${prefix}_diffbind_pca.png", width=1000, height=800, res=150)
+                dba.plotPCA(analysis_status, attributes=contrast_category, label=DBA_ID)
+                dev.off()
+
+                img_pca_64 <- base64encode("${prefix}_diffbind_pca.png")
+                
+                cat(paste0(
+                    "\\n",
+                    "<div style='text-align: center; padding: 20px;'>\\n",
+                    "  <img src='data:image/png;base64,", img_pca_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
+                    "</div>"
+                ), file="${prefix}_diffbind_pca_mqc.html")
+            }, silent=TRUE)
         }
-
-        try({
-            png("${prefix}_diffbind_pca.png", width=1000, height=800, res=150)
-            dba.plotPCA(db_obj, attributes=contrast_category, label=DBA_ID)
-            dev.off()
-
-            img_pca_64 <- base64encode("${prefix}_diffbind_pca.png")
-            
-            cat(paste0(
-                "\\n",
-                "<div style='text-align: center; padding: 20px;'>\\n",
-                "  <img src='data:image/png;base64,", img_pca_64, "' style='width: 500px; max-width: 100%; height: auto;'>\\n",
-                "</div>"
-            ), file="${prefix}_diffbind_pca_mqc.html")
-        }, silent=TRUE)
     }
 
     writeLines(c(
