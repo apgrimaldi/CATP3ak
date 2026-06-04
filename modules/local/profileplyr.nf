@@ -43,7 +43,7 @@ process PROFILEPLYR {
         gr_list <- lapply(files, function(f) {
             tryCatch({
                 gr <- rtracklayer::import(f)
-                if (!is.null(mcols(gr)\\$score)) mcols(gr)\\$score <- as.numeric(mcols(gr)\\$score)
+                if (!is.null(mcols(gr)\$score)) mcols(gr)\$score <- as.numeric(mcols(gr)\$score)
                 return(gr)
             }, error = function(e) NULL)
         })
@@ -74,8 +74,8 @@ process PROFILEPLYR {
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
-        if (!is.null(mcols(peaks_gr)\\$score)) {
-            peaks_gr <- peaks_gr[order(mcols(peaks_gr)\\$score, decreasing = TRUE)]
+        if (!is.null(mcols(peaks_gr)\$score)) {
+            peaks_gr <- peaks_gr[order(mcols(peaks_gr)\$score, decreasing = TRUE)]
         }
 
         if (length(peaks_gr) > 15000) {
@@ -96,7 +96,7 @@ process PROFILEPLYR {
         )
 
         pro_obj <- as_profileplyr(pro_chip)
-        sampleData(pro_obj)\\$sample_id <- sub("\\\\.(bw|bigWig)\\$", "", basename(bw_files))
+        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\\$", "", basename(bw_files))
 
         tryCatch({
             ht <- generateEnrichedHeatmap(pro_obj, 
@@ -144,7 +144,7 @@ process PROFILEPLYR {
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
-                "  <p>Errore durante il plotting: ", e\\$message, "</p>\\n",
+                "  <p>Errore durante il plotting: ", e\$message, "</p>\\n",
                 "</div>"
             ), file="${label}_profileplyr_mqc.html")
             file.create("${label}_profile_heatmap.png")
