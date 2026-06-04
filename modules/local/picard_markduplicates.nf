@@ -5,8 +5,8 @@ process PICARD_MARKDUPLICATES {
 
     input:
     tuple val(meta), path(bam)
-    path fasta  // File singolo del genoma
-    path fai    // File singolo dell'indice .fai
+    path fasta  
+    path fai    
 
     output:
     tuple val(meta), path("*.removed.bam")       , emit: bam
