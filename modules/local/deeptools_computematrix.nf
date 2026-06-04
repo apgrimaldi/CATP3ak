@@ -1,7 +1,7 @@
 process DEEPTOOLS_COMPUTEMATRIX {
     tag "$meta.id"
     label 'process_high'
-    // Utilizziamo un container stabile
+
     container 'quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0'
 
     input:
@@ -19,7 +19,7 @@ process DEEPTOOLS_COMPUTEMATRIX {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     
-    // Assicuriamoci che numberOfProcessors non superi le risorse allocate
+    
     """
     computeMatrix \\
         $args \\
