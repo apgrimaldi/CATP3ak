@@ -31,7 +31,7 @@ process PROFILEPLYR {
     diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     
-    # Prende TUTTI i file BigWig, senza cancellare gli Input (12 colonne totali)
+
     bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
 
     import_and_merge_peaks <- function(files) {
