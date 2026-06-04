@@ -28,16 +28,22 @@ process PROFILEPLYR {
 
     print(paste("Analisi Profileplyr:", "${label}"))
 
-    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
-    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
-    bw_files   <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
+    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
+    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
+    
+    all_bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\\$", full.names = TRUE)
+    bw_files <- all_bw_files[!grepl("input", all_bw_files, ignore.case = TRUE)]
+    
+    if (length(bw_files) == 0) {
+        bw_files <- all_bw_files
+    }
 
     import_and_merge_peaks <- function(files) {
         if (length(files) == 0) return(NULL)
         gr_list <- lapply(files, function(f) {
             tryCatch({
                 gr <- rtracklayer::import(f)
-                if (!is.null(mcols(gr)\$score)) mcols(gr)\$score <- as.numeric(mcols(gr)\$score)
+                if (!is.null(mcols(gr)\\$score)) mcols(gr)\\$score <- as.numeric(mcols(gr)\\$score)
                 return(gr)
             }, error = function(e) NULL)
         })
@@ -68,8 +74,8 @@ process PROFILEPLYR {
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
-        if (!is.null(mcols(peaks_gr)\$score)) {
-            peaks_gr <- peaks_gr[order(mcols(peaks_gr)\$score, decreasing = TRUE)]
+        if (!is.null(mcols(peaks_gr)\\$score)) {
+            peaks_gr <- peaks_gr[order(mcols(peaks_gr)\\$score, decreasing = TRUE)]
         }
 
         if (length(peaks_gr) > 15000) {
@@ -90,10 +96,13 @@ process PROFILEPLYR {
         )
 
         pro_obj <- as_profileplyr(pro_chip)
-        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
+        sampleData(pro_obj)\\$sample_id <- sub("\\\\.(bw|bigWig)\\$", "", basename(bw_files))
 
         tryCatch({
-            ht <- generateEnrichedHeatmap(pro_obj, use_raster = FALSE)
+            ht <- generateEnrichedHeatmap(pro_obj, 
+                                          use_raster = FALSE, 
+                                          column_title_rot = 90, 
+                                          matrices_color = c("lightpink", "purple"))
             
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
             print(ht)
@@ -135,7 +144,7 @@ process PROFILEPLYR {
                 "\\n",
                 "<div style='text-align: center; padding: 20px;'>\\n",
                 "  <h3>Profile Analysis: ", "${label}", "</h3>\\n",
-                "  <p>Errore durante il plotting: ", e\$message, "</p>\\n",
+                "  <p>Errore durante il plotting: ", e\\$message, "</p>\\n",
                 "</div>"
             ), file="${label}_profileplyr_mqc.html")
             file.create("${label}_profile_heatmap.png")
