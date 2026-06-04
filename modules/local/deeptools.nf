@@ -19,7 +19,7 @@ process DEEPTOOLS {
     def extend = (meta.single_end && params.fragment_size > 0) ? "--extendReads ${params.fragment_size}" : (params.single_end ? "--extendReads" : "")
     
     """
-    # 1. BigWig per Visualizzazione (BinSize 10bp)
+   
     bamCoverage \\
         --bam $bam \\
         --outFileName ${prefix}.display.bw \\
@@ -28,7 +28,7 @@ process DEEPTOOLS {
         --numberOfProcessors $task.cpus \\
         $extend
 
-    # 2. BigWig per Lanceotron 
+  
     bamCoverage \\
         --bam $bam \\
         --outFileName ${prefix}.l6n.bw \\
@@ -37,7 +37,7 @@ process DEEPTOOLS {
         --numberOfProcessors $task.cpus \\
         $extend
 
-    # 3. Fingerprint QC
+ 
     plotFingerprint \\
         --bamfiles $bam \\
         --plotFile ${prefix}.plotFingerprint.pdf \\
