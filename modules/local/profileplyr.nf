@@ -31,7 +31,7 @@ process PROFILEPLYR {
     diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
     
-    all_bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\\$", full.names = TRUE)
+    all_bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
     bw_files <- all_bw_files[!grepl("input", all_bw_files, ignore.case = TRUE)]
     
     if (length(bw_files) == 0) {
