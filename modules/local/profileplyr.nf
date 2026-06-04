@@ -28,15 +28,11 @@ process PROFILEPLYR {
 
     print(paste("Analisi Profileplyr:", "${label}"))
 
-    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
-    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\$", full.names = TRUE)
+    diff_files <- list.files("diff_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
+    raw_files  <- list.files("raw_peaks", pattern = "\\\\.(bed|narrowPeak|broadPeak)\\$", full.names = TRUE)
     
-    all_bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\$", full.names = TRUE)
-    bw_files <- all_bw_files[!grepl("input", all_bw_files, ignore.case = TRUE)]
-    
-    if (length(bw_files) == 0) {
-        bw_files <- all_bw_files
-    }
+    # Prende TUTTI i file BigWig, senza cancellare gli Input (12 colonne totali)
+    bw_files <- list.files("bigwigs", pattern = "\\\\.(bw|bigWig)\\$", full.names = TRUE)
 
     import_and_merge_peaks <- function(files) {
         if (length(files) == 0) return(NULL)
@@ -96,7 +92,7 @@ process PROFILEPLYR {
         )
 
         pro_obj <- as_profileplyr(pro_chip)
-        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
+        sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\\$", "", basename(bw_files))
 
         tryCatch({
             ht <- generateEnrichedHeatmap(pro_obj, 
@@ -104,19 +100,19 @@ process PROFILEPLYR {
                                           column_title_rot = 90, 
                                           matrices_color = c("lightpink", "purple"))
             
-            pdf("${label}_profile_heatmap.pdf", width=8, height=10)
+            pdf("${label}_profile_heatmap.pdf", width=12, height=10)
             print(ht)
             dev.off()
 
             png_success <- FALSE
             tryCatch({
-                png("${label}_profile_heatmap.png", width=1200, height=1400, res=150, type="cairo")
+                png("${label}_profile_heatmap.png", width=1800, height=1400, res=150, type="cairo")
                 print(ht)
                 dev.off()
                 png_success <- TRUE
             }, error = function(e_cairo) {
                 tryCatch({
-                    png("${label}_profile_heatmap.png", width=1200, height=1400, res=150)
+                    png("${label}_profile_heatmap.png", width=1800, height=1400, res=150)
                     print(ht)
                     dev.off()
                     png_success <- TRUE
@@ -132,7 +128,7 @@ process PROFILEPLYR {
                     "<div style='text-align: center; padding: 20px;'>\\n",
                     "  <h3>Profile Analysis (", "${label}", ")</h3>\\n",
                     "  <p><strong>Modalità usata: </strong> ", used_mode, "</p>\\n",
-                    "  <img src='data:image/png;base64,", img_64, "' style='width: 600px; max-width: 100%; height: auto; border: 1px solid #ddd;'>\\n",
+                    "  <img src='data:image/png;base64,", img_64, "' style='width: 800px; max-width: 100%; height: auto; border: 1px solid #ddd;'>\\n",
                     "</div>"
                 ), file="${label}_profileplyr_mqc.html")
             } else {
