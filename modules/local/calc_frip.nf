@@ -13,13 +13,12 @@ process CALC_FRIP {
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    # 1. Conta le reads totali mappate
+   
     TOTAL_MAPPED=\$(samtools view -c -F 4 $bam)
 
-    # 2. Calcola le reads nei picchi
     READS_IN_PEAKS=\$(samtools view -u $bam | bedtools intersect -a stdin -b $peak -u -bed | wc -l)
 
-    # 3. Calcolo finale senza header per il bargraph MultiQC
+   
     echo "# id: 'frip_score'" > ${prefix}.FRiP.txt
     echo "# section_name: 'FRiP Score'" >> ${prefix}.FRiP.txt
     echo "# format: 'tsv'" >> ${prefix}.FRiP.txt
