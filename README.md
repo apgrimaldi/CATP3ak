@@ -79,16 +79,16 @@ deepTools QC + BigWig Generation
  ↓
  ├── MACS3 Peak Calling
  └── Lanceotron Peak Calling
-          ↓
-       FRiP Score
-          ↓
-     HOMER Annotation
-          ↓
-        DiffBind
-          ↓
-      Profileplyr
-          ↓
-         MultiQC
+ ↓
+ FRiP Score
+ ↓
+ HOMER Annotation
+ ↓
+DiffBind
+ ↓
+Profileplyr
+ ↓
+ MultiQC
 ```
 
 ---
