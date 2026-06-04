@@ -75,7 +75,7 @@ process FILTER_LANCEOTRON {
                     except ValueError:
                         continue
 
-    # <--- GENERIAMO IL FILE PER MULTIQC ALLA FINE DELLO SCRIPT
+
     with open(out_mqc, "w") as mq:
         mq.write("# id: 'lanceotron_filtered'\\n")
         mq.write("# section_name: 'Lanceotron Filtered Peaks'\\n")
