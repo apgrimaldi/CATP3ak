@@ -4,7 +4,7 @@ process HOMER_ANNOTATEPEAKS {
     container 'quay.io/biocontainers/homer:4.11--pl526hc9558a2_3'
 
     input:
-    val caller      /
+    val caller      
     tuple val(meta), path(peak)
     path  fasta
     path  gtf
