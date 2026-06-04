@@ -4,7 +4,7 @@ process HOMER_ANNOTATEPEAKS {
     container 'quay.io/biocontainers/homer:4.11--pl526hc9558a2_3'
 
     input:
-    val caller      // <--- 1. AGGIUNTO: riceve "macs3" o "lanceotron" dal main.nf
+    val caller      /
     tuple val(meta), path(peak)
     path  fasta
     path  gtf
@@ -20,11 +20,11 @@ process HOMER_ANNOTATEPEAKS {
     def peak_name = (peak != null && peak.name != null) ? peak.name : "unknown"
     def type = peak_name.contains('narrow') ? 'narrow' : 'broad'
     
-    // <--- 2. AGGIUNTO: Inseriamo il caller direttamente nel nome base del file
+    
     def prefix = "${caller}_${meta.id}.${type}"
     def VERSION = '4.11' 
     """
-    # 1. Gestione GTF 
+     
     GTF_FILE=\$(basename ${gtf})
     if [[ \${GTF_FILE} == *.gz ]]; then
         gunzip -c ${gtf} > reference.gtf
@@ -33,7 +33,7 @@ process HOMER_ANNOTATEPEAKS {
         ANNOT_FILE="${gtf}"
     fi
 
-    # 2. Esecuzione Annotazione
+    
     annotatePeaks.pl \\
         $peak \\
         $fasta \\
@@ -42,8 +42,7 @@ process HOMER_ANNOTATEPEAKS {
         -cpu $task.cpus \\
         > ${prefix}.annotatePeaks.txt
 
-    # 3. Statistiche per MultiQC (Custom Content)
-    # Aggiornato per separare i plot di MACS3 e Lanceotron in MultiQC
+    
     echo "# id: 'homer_annotations_${caller}_${type}'" > ${prefix}.homer_stats_mqc.txt
     echo "# section_name: 'HOMER Peak Annotation (${caller.toUpperCase()} - ${type.capitalize()})'" >> ${prefix}.homer_stats_mqc.txt
     echo "# format: 'tsv'" >> ${prefix}.homer_stats_mqc.txt
@@ -52,14 +51,14 @@ process HOMER_ANNOTATEPEAKS {
     echo "#    title: 'Peak Annotation Distribution (${caller.toUpperCase()} - ${type})'" >> ${prefix}.homer_stats_mqc.txt
     echo -e "Sample\\tIntergenic\\tTTS\\texon\\tintron\\tpromoter-TSS" >> ${prefix}.homer_stats_mqc.txt
     
-    # Estrazione conteggi
+   
     INTERGENIC=\$(cut -f8 ${prefix}.annotatePeaks.txt | grep -c "Intergenic" || true)
     TTS=\$(cut -f8 ${prefix}.annotatePeaks.txt | grep -c "TTS" || true)
     EXON=\$(cut -f8 ${prefix}.annotatePeaks.txt | grep -c "exon" || true)
     INTRON=\$(cut -f8 ${prefix}.annotatePeaks.txt | grep -c "intron" || true)
     PROMOTER=\$(cut -f8 ${prefix}.annotatePeaks.txt | grep -i -c "promoter-TSS" || true)
     
-    # Salvataggio dati
+    
     echo -e "${prefix}\\t\$INTERGENIC\\t\$TTS\\t\$EXON\\t\$INTRON\\t\$PROMOTER" >> ${prefix}.homer_stats_mqc.txt
 
     cat <<-END_VERSIONS > versions.yml
