@@ -93,7 +93,7 @@ process PROFILEPLYR {
         sampleData(pro_obj)\$sample_id <- sub("\\\\.(bw|bigWig)\$", "", basename(bw_files))
 
         tryCatch({
-            ht <- generateEnrichedHeatmap(pro_obj, use_raster = FALSE, column_title_rot = 90)
+            ht <- generateEnrichedHeatmap(pro_obj, use_raster = FALSE)
             
             pdf("${label}_profile_heatmap.pdf", width=8, height=10)
             print(ht)
