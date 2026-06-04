@@ -6,7 +6,7 @@ A Nextflow DSL2 pipeline for comprehensive ATAC-seq and ChIP-seq data analysis.
 
 CATP3ak was developed to improve peak identification by integrating multiple complementary peak-calling approaches within a single reproducible workflow. Starting from raw sequencing data, the pipeline performs quality control, preprocessing, alignment, duplicate removal, blacklist filtering, peak calling, annotation, differential binding analysis, signal profiling, and reporting.
 
-By combining statistical, deep-learning, and Hidden Markov Model-based approaches, CATP3ak enables a comprehensive evaluation of chromatin accessibility and protein–DNA interaction data while facilitating downstream biological interpretation.
+By combining statistical, deep-learning, and Hidden Markov Model-based approaches, integrated application of these tools significantly improves precision and accuracy in peak calling.
 
 
 [![Nextflow](https://img.shields.io/badge/Nextflow-DSL2-brightgreen)](https://www.nextflow.io/)
@@ -27,7 +27,7 @@ Executes multiple peak-calling strategies
 Produces publication-ready quality-control reports
 
 ---
-Features
+## Features
 ChIP-seq and ATAC-seq support
 Automatic Single-End / Paired-End detection
 Automatic control sample identification
@@ -143,7 +143,7 @@ CATP3ak supports custom reference genomes.
 
 | Parameter         | Description                           |
 | ----------------- | ------------------------------------- |
-| `--fasta_file`    | Reference genome FASTA file           |
+| `--reference_file`    | Reference genome FASTA file           |
 | `--gtf_file`      | Gene annotation GTF file              |
 | `--macs_gsize`    | Effective genome size for MACS3       |
 | `--blacklist`     | BED file containing blacklist regions |
@@ -171,9 +171,9 @@ nextflow run apgrimaldi/CATP3ak \
 ### ChIP-seq Example
 
 ```csv
-sample,fastq_1,fastq_2,antibody,control,is_control
-IP_H3K27ac_1,data/IP_H3K27ac_1.fastq.gz,,H3K27ac,Input_1,false
-Input_1,data/Input_1.fastq.gz,,, ,true
+sample,fastq_1,fastq_2,antibody,control
+IP_H3K27ac_1,data/IP_H3K27ac_1.fastq.gz,,H3K27ac,Input_1
+Input_1,data/Input_1.fastq.gz,,,
 ```
 
 ### ATAC-seq Example
@@ -193,7 +193,7 @@ ATAC_2,data/ATAC_2_R1.fastq.gz,data/ATAC_2_R2.fastq.gz
 | `fastq_2`    | Read 2 FASTQ file (leave empty for Single-End data) |
 | `antibody`   | Antibody name (ChIP-seq only)                       |
 | `control`    | Matching control sample                             |
-| `is_control` | Optional control flag (`true` or `false`)           |
+
 
 ---
 
@@ -271,7 +271,6 @@ All software dependencies are executed within containers, ensuring reproducible 
 Supported execution environments:
 
 * Docker
-* Singularity / Apptainer
 * AWS-compatible infrastructures
 
 ---
@@ -280,10 +279,7 @@ Supported execution environments:
 
 **Annapaola Grimaldi**
 
-Biological Sciences
+Laboratory of Molecular Medicine and Genomics, Department of Medicine, Surgery and Dentistry "Scuola Medica Salernitana", University of Salerno, 84081, Baronissi, SA, Italy.
 
 GitHub: https://github.com/apgrimaldi
 
----
-
-CATP3ak was developed to provide a reproducible and user-friendly framework for chromatin accessibility and protein–DNA interaction studies.
