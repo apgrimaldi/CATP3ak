@@ -18,10 +18,10 @@ process PICARD_MARKDUPLICATES {
     def args = task.ext.args ?: '--REMOVE_DUPLICATES true --ASSUME_SORTED true --VALIDATION_STRINGENCY LENIENT --CREATE_INDEX true'
     def prefix = task.ext.prefix ?: "${meta.id}"
     
-    // Gestione riferimento opzionale
+    
     def reference = fasta ? "--REFERENCE_SEQUENCE ${fasta}" : ""
     
-    // Calcolo memoria dinamico
+    
     def avail_mem = 3072
     if (task.memory) {
         avail_mem = (task.memory.mega * 0.8).intValue()
