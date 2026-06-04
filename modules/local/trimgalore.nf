@@ -8,18 +8,17 @@ process TRIMGALORE {
     tuple val(meta), path(reads)
 
     output:
-    // Cattura i file con i suffissi standard di TrimGalore
+
     tuple val(meta), path("*.fq.gz")       , emit: reads
     tuple val(meta), path("*_report.txt")  , emit: log
     path "versions.yml"                    , emit: versions
 
     script:
-    // TrimGalore suggerisce di allocare meno core di quelli totali del task 
-    // perché lancia processi paralleli per cutadapt e pigz
+    
     def cores = task.cpus ? Math.max(Math.floor(task.cpus / 2) as int, 1) : 2
 
     if (meta.single_end) {
-        // --- LOGICA SINGLE-END ---
+        
         """
         trim_galore \\
             --cores $cores \\
@@ -33,7 +32,7 @@ process TRIMGALORE {
         EOF
         """
     } else {
-        // --- LOGICA PAIRED-END ---
+        
         """
         trim_galore \\
             --cores $cores \\
