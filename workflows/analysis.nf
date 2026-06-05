@@ -178,6 +178,10 @@ workflow ATAC_CHIP_PIPELINE {
     // =========================================================================
     ch_diffbind_macs_mqc = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
+    
+    // AGGIUNTO: Canali di default vuoti per i file BED di DiffBind
+    ch_diffbind_macs_bed = Channel.empty() 
+    ch_diffbind_lance_bed = Channel.empty()
 
     if (!params.skip_diffbind) {
         // --- DiffBind per MACS3 ---
@@ -196,6 +200,9 @@ workflow ATAC_CHIP_PIPELINE {
 
         DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
+        
+        // AGGIUNTO: Assegniamo l'output al canale solo se il processo gira
+        ch_diffbind_macs_bed = DIFFBIND_MACS.out.sig_bed 
         ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
 
         // --- DiffBind per Lanceotron ---
@@ -214,6 +221,9 @@ workflow ATAC_CHIP_PIPELINE {
 
         DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
         ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
+        
+        // AGGIUNTO: Assegniamo l'output al canale solo se il processo gira
+        ch_diffbind_lance_bed = DIFFBIND_LANCE.out.sig_bed
         ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
     }
 
@@ -225,7 +235,7 @@ workflow ATAC_CHIP_PIPELINE {
         
         // Profileplyr su Lanceotron
         PROFILEPLYR_LANCE ( 
-            DIFFBIND_LANCE.out.sig_bed.collect().ifEmpty([]),            // [INPUT 1] I picchi DiffBind
+            ch_diffbind_lance_bed.collect().ifEmpty([]),             // MODIFICATO: Usiamo il canale sicuro
             FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), // [INPUT 2] Il Fallback (picchi filtrati)
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
             "lanceotron"                                                 // [INPUT 4] Label
@@ -233,7 +243,7 @@ workflow ATAC_CHIP_PIPELINE {
 
         // Profileplyr su MACS3
         PROFILEPLYR_MACS ( 
-            DIFFBIND_MACS.out.sig_bed.collect().ifEmpty([]),             // [INPUT 1] I picchi DiffBind
+            ch_diffbind_macs_bed.collect().ifEmpty([]),              // MODIFICATO: Usiamo il canale sicuro
             ch_narrow_peaks.map{ it[1] }.collect(),                      // [INPUT 2] Il Fallback (picchi grezzi)
             DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
             "macs3"                                                      // [INPUT 4] Label
