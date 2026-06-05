@@ -101,7 +101,12 @@ process DIFFBIND {
                 df_sig <- as.data.frame(res_db)
                 bed_sig <- df_sig[, c("seqnames", "start", "end")]
                 bed_sig\$name <- paste0("DB_site_", 1:nrow(bed_sig))
-                bed_sig\$score <- df_sig\$FDR
+                
+                # --- MODIFICA CHIAVE QUI ---
+                # Usiamo Fold invece di FDR. Così avremo valori positivi (Gain) e negativi (Loss)
+                bed_sig\$score <- df_sig\$Fold 
+                # ---------------------------
+
                 write.table(bed_sig, "${prefix}_diffbind_sig_peaks.bed", sep="\t", row.names=FALSE, col.names=FALSE, quote=FALSE)
             }
 
