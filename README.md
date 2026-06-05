@@ -96,7 +96,7 @@ Profileplyr
 ## Requirements
 
 * Nextflow ≥ 25.x
-* Docker (recommended) or Singularity/Apptainer
+* Docker
 * Linux environment
 
 Verify installation:
