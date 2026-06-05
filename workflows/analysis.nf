@@ -18,11 +18,9 @@ include { LANCEOTRON } from '../modules/local/lanceotron.nf'
 include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
-
-// Modulo per il filtraggio dei picchi Lanceotron (>0.5)
 include { FILTER_LANCEOTRON } from '../modules/local/filter_lanceotron.nf'
 
-// Moduli downstream sdoppiati tramite Alias
+// Moduli  sdoppiati tramite Alias
 include { HOMER_ANNOTATEPEAKS as HOMER_MACS } from '../modules/local/homer_annotate.nf'
 include { HOMER_ANNOTATEPEAKS as HOMER_LANCE } from '../modules/local/homer_annotate.nf'
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
@@ -120,11 +118,11 @@ workflow ATAC_CHIP_PIPELINE {
             }
     }
 
-    // Peak calling con Lanceotron (Picchi Integrali Grezzi)
+    // Peak calling con Lanceotron 
     LANCEOTRON ( ch_lanceotron_input )
     ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
 
-    // Filtro stringente su Lanceotron (Soglia standard > 0.5)
+    // Filtro Lanceotron (0.5)
     FILTER_LANCEOTRON ( LANCEOTRON.out.peaks, params.lanceotron_threshold ?: 0.5 )
 
     if (params.protocol == 'atac') {
@@ -155,9 +153,7 @@ workflow ATAC_CHIP_PIPELINE {
         .map { id, meta, bam, peak -> [ meta, bam, peak ] }
     CALC_FRIP ( ch_frip_input )
 
-    // =========================================================================
-    // ANNOTAZIONE CON HOMER (SDOPPIATA)
-    // =========================================================================
+    // HOMER
     ch_homer_macs_mqc = Channel.empty()
     ch_homer_lance_mqc = Channel.empty()
 
@@ -173,18 +169,16 @@ workflow ATAC_CHIP_PIPELINE {
         ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
     }
 
-    // =========================================================================
-    // ANALISI DIFFERENZIALE DIFFBIND (SDOPPIATA)
-    // =========================================================================
+    // DIFFBIND
+
     ch_diffbind_macs_mqc = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
     
-    // AGGIUNTO: Canali di default vuoti per i file BED di DiffBind
     ch_diffbind_macs_bed = Channel.empty() 
     ch_diffbind_lance_bed = Channel.empty()
 
     if (!params.skip_diffbind) {
-        // --- DiffBind per MACS3 ---
+        
         ch_diffbind_macs_prep = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
             .join( ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] } )
@@ -201,11 +195,11 @@ workflow ATAC_CHIP_PIPELINE {
         DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
         ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
         
-        // AGGIUNTO: Assegniamo l'output al canale solo se il processo gira
+        
         ch_diffbind_macs_bed = DIFFBIND_MACS.out.sig_bed 
         ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
 
-        // --- DiffBind per Lanceotron ---
+        
         ch_diffbind_lance_prep = ch_bams_branched.ip
             .map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }
             .join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } )
@@ -222,31 +216,29 @@ workflow ATAC_CHIP_PIPELINE {
         DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
         ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
         
-        // AGGIUNTO: Assegniamo l'output al canale solo se il processo gira
+        
         ch_diffbind_lance_bed = DIFFBIND_LANCE.out.sig_bed
         ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
     }
 
-    // =========================================================================
-    // GENERAZIONE HEATMAPS PROFILEPLYR (CON FALLBACK AUTOMATICO: DiffBind -> Raw)
-    // =========================================================================
+    //PROFILEPLYR
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
         
-        // Profileplyr su Lanceotron
+        
         PROFILEPLYR_LANCE ( 
-            ch_diffbind_lance_bed.collect().ifEmpty([]),             // MODIFICATO: Usiamo il canale sicuro
-            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), // [INPUT 2] Il Fallback (picchi filtrati)
-            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
-            "lanceotron"                                                 // [INPUT 4] Label
+            ch_diffbind_lance_bed.collect().ifEmpty([]),             
+            FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), 
+            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             
+            "lanceotron"                                                 
         )
 
-        // Profileplyr su MACS3
+        
         PROFILEPLYR_MACS ( 
-            ch_diffbind_macs_bed.collect().ifEmpty([]),              // MODIFICATO: Usiamo il canale sicuro
-            ch_narrow_peaks.map{ it[1] }.collect(),                      // [INPUT 2] Il Fallback (picchi grezzi)
-            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             // [INPUT 3] I BigWig
-            "macs3"                                                      // [INPUT 4] Label
+            ch_diffbind_macs_bed.collect().ifEmpty([]),              
+            ch_narrow_peaks.map{ it[1] }.collect(),                      
+            DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),             
+            "macs3"                                                      
         )
 
         ch_profileplyr_mqc = PROFILEPLYR_LANCE.out.mqc_html
@@ -260,16 +252,14 @@ workflow ATAC_CHIP_PIPELINE {
         )
     }
 
-    // =========================================================================
-    // CONVOGLIAMENTO OUTPUT E REPORT GENERALE MULTIQC
-    // =========================================================================
+    // MULTIQC
     ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc).collect().ifEmpty([])
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc).collect().ifEmpty([])
 
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
     
-    // Mix dei log di picchi grezzi e picchi filtrati di Lanceotron per MultiQC
+    
     ch_lance_combined_mqc = LANCEOTRON.out.counts_mqc.map{ it[1] }
         .mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] })
         .collect()
