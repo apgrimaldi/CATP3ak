@@ -228,7 +228,7 @@ workflow ATAC_CHIP_PIPELINE {
 
         // Omnipeak
         ch_diffbind_omni_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( ch_omni_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
-        ch_db_omni_samplesheet = ch_diffbind_omni_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},broad" }.collectFile(name: 'samplesheet_diffbind_omnipeak.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+        ch_db_omni_samplesheet = ch_diffbind_omni_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},bed" }.collectFile(name: 'samplesheet_diffbind_omnipeak.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
         DIFFBIND_OMNI ( "omnipeak", ch_db_omni_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_omni_peaks.map{ it[1] }.collect() )
         ch_diffbind_omni_mqc = DIFFBIND_OMNI.out.mqc_html.mix(DIFFBIND_OMNI.out.mqc_txt).collect().ifEmpty([])
         ch_versions = ch_versions.mix(DIFFBIND_OMNI.out.versions)
