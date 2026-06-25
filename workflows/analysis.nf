@@ -171,7 +171,7 @@ workflow ATAC_CHIP_PIPELINE {
             }
     }
 
-    // CONTROLLO DI SICUREZZA AGGIUNTO
+    // CONTROLLO
     if (!chrom_sizes_file) {
         exit 1, "ERRORE: Manca il file 'chrom.sizes'! Passalo nel comando con --chrom_sizes /percorso/file"
     }
@@ -195,15 +195,15 @@ workflow ATAC_CHIP_PIPELINE {
     if (!params.skip_homer && reference_file && gtf_file) {
         ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks).filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
-        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.collect().ifEmpty([]) // RIMOSSO .map{ it[1] }
 
         ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
-        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.collect().ifEmpty([]) // RIMOSSO .map{ it[1] }
 
         ch_homer_omni_input = ch_omni_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_OMNI ( "omnipeak", ch_homer_omni_input, file(reference_file), file(gtf_file) )
-        ch_homer_omni_mqc = HOMER_OMNI.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        ch_homer_omni_mqc = HOMER_OMNI.out.stats_mqc.collect().ifEmpty([])
     }
 
     // --- DIFFBIND ---
@@ -266,8 +266,8 @@ workflow ATAC_CHIP_PIPELINE {
         ch_all_homer_mqc,
         ch_all_diffbind_mqc,
         ch_profileplyr_mqc,
-        LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }).collect().ifEmpty([]), 
-        OMNIPEAK.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]), 
-        ch_versions_mqc 
+        LANCEOTRON.out.counts_mqc.mix(FILTER_LANCEOTRON.out.counts_mqc).collect().ifEmpty([]), // RIMOSSO map{ it[1] }
+        OMNIPEAK.out.counts_mqc.collect().ifEmpty([]), // RIMOSSO map{ it[1] }
+        ch_versions_mqc
     )
 }
