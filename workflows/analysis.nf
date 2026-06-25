@@ -55,6 +55,8 @@ workflow ATAC_CHIP_PIPELINE {
         gtf_file       = params.gtf_file       ?: gdata.gtf
         bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
+        // MODIFICA CRUCIALE: Prendi il parametro chrom_sizes anche se si usa un genoma noto
+        chrom_sizes_file = params.chrom_sizes  ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
         reference_file = params.reference_file
@@ -162,14 +164,17 @@ workflow ATAC_CHIP_PIPELINE {
         ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
         ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
         
-        
         ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
-            .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } // Evita crash se un controllo non ha una IP associata
+            .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } 
             .map { ctrl_id, meta_bam, ctrl_bam -> 
                 [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
             }
     }
 
+    // CONTROLLO DI SICUREZZA AGGIUNTO
+    if (!chrom_sizes_file) {
+        exit 1, "ERRORE: Manca il file 'chrom.sizes'! Passalo nel comando con --chrom_sizes /percorso/file"
+    }
     
     ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
     
@@ -245,7 +250,6 @@ workflow ATAC_CHIP_PIPELINE {
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
-    ch_lance_combined_mqc = LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }, OMNIPEAK.out.counts_mqc.map{ it[1] }).collect().ifEmpty([])
 
     MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
@@ -262,8 +266,8 @@ workflow ATAC_CHIP_PIPELINE {
         ch_all_homer_mqc,
         ch_all_diffbind_mqc,
         ch_profileplyr_mqc,
-        LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }).collect().ifEmpty([]), // 
-        OMNIPEAK.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]), // 
-        ch_versions_mqc //
+        LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }).collect().ifEmpty([]), 
+        OMNIPEAK.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]), 
+        ch_versions_mqc 
     )
 }
