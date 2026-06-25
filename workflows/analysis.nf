@@ -250,7 +250,8 @@ workflow ATAC_CHIP_PIPELINE {
         ch_all_homer_mqc,
         ch_all_diffbind_mqc,
         ch_profileplyr_mqc,
-        ch_lance_combined_mqc,
-        ch_versions_mqc
+        LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }).collect().ifEmpty([]), // 
+        OMNIPEAK.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]), // 
+        ch_versions_mqc //
     )
 }
