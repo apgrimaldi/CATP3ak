@@ -195,17 +195,16 @@ workflow ATAC_CHIP_PIPELINE {
     if (!params.skip_homer && reference_file && gtf_file) {
         ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks).filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
-        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.collect().ifEmpty([]) // RIMOSSO .map{ it[1] }
+        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.collect().ifEmpty([]) 
 
         ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
-        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.collect().ifEmpty([]) // RIMOSSO .map{ it[1] }
+        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.collect().ifEmpty([]) 
 
         ch_homer_omni_input = ch_omni_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
         HOMER_OMNI ( "omnipeak", ch_homer_omni_input, file(reference_file), file(gtf_file) )
         ch_homer_omni_mqc = HOMER_OMNI.out.stats_mqc.collect().ifEmpty([])
     }
-
     // --- DIFFBIND ---
     ch_diffbind_macs_mqc = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
