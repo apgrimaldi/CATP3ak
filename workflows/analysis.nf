@@ -162,12 +162,15 @@ workflow ATAC_CHIP_PIPELINE {
         ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
         ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
         
-        ch_omni_input = ch_ip_omni.leftJoin(ch_ct_omni)
+        // CORREZIONE: Usiamo join con remainder: true al posto di leftJoin
+        ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
+            .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } // Evita crash se un controllo non ha una IP associata
             .map { ctrl_id, meta_bam, ctrl_bam -> 
                 [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
             }
     }
 
+    // Carichiamo il file chrom.sizes nel canale e lo passiamo al processo
     ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
     
     OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
