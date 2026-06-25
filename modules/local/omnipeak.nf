@@ -1,5 +1,5 @@
 process OMNIPEAK {
-    tag "${meta.id}"
+    tag "$meta.id"
     label 'process_high'
     container 'biohaz/omnipeak:latest'
 
@@ -7,21 +7,19 @@ process OMNIPEAK {
     tuple val(meta), path(ip_bam), path(control_bam)
 
     output:
-    tuple val(meta), path("${meta.id}_peaks.bed"), emit: peaks
-    path "*_omnipeak_mqc.txt"                    , emit: counts_mqc
-    path "versions.yml"                          , emit: versions
+    tuple val(meta), path("*_peaks.bed"), emit: peaks
+    path "*_omnipeak_mqc.txt"           , emit: counts_mqc
+    path "versions.yml"                 , emit: versions
 
     script:
-    def has_control = control_bam.name != 'null' && control_bam.toString() != ''
-    def control_arg = has_control ? "-c ${control_bam}" : ""
-    
     """
-    java --add-modules=jdk.incubator.vector -Xmx16G -jar /home/omnipeak/build/libs/omnipeak-1.5.build.jar analyze \\
-        --threads 4 \\
-        --treatment ${ip_bam} \\
-        --control ${control_bam} \\
-        --cs /home/omnipeak/chrom.sizes \\
-        --peaks ${meta.id}_peaks.bed
+    java --add-modules=jdk.incubator.vector -Xmx16G -jar /home/omnipeak/build/libs/omnipeak-1.5.build.jar analyze \
+        --threads 4 \
+        --treatment "${ip_bam}" \
+        --control "${control_bam}" \
+        --cs /home/omnipeak/chrom.sizes \
+        --peaks "${meta.id}_peaks.bed" \
+        > omnipeak.log 2>&1
 
     PEAK_COUNT=\$(wc -l < ${meta.id}_peaks.bed)
     cat <<EOF > ${meta.id}_omnipeak_mqc.txt
