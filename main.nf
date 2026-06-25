@@ -8,10 +8,10 @@ def create_fastq_channel(LinkedHashMap row, Set known_controls) {
     meta.antibody   = (row.antibody && row.antibody.trim() != "") ? row.antibody.trim() : 'none'
     meta.control    = (row.control && row.control.trim() != "") ? row.control.trim() : 'none'
     
-    // === NUOVA RIGA PER IL GRUPPO ===
-    // Se la colonna c'è e non è vuota prende il valore, altrimenti usa 'Baseline' di default
+    
+    
     meta.group      = (row.group && row.group.trim() != "") ? row.group.trim() : 'Baseline'
-    // ================================
+    
 
     if (params.protocol == 'atac') {
         meta.is_control = false
@@ -59,7 +59,7 @@ workflow {
         .splitCsv(header:true, sep:',')
         .map { row -> create_fastq_channel(row, known_controls) }
     
-    // Ho aggiornato anche il log visivo così vedi subito se sta leggendo il gruppo giusto!
+    
     ch_input.view { meta, reads -> 
         "LOG: ID: ${meta.id} | Antibody: ${meta.antibody} | Group: ${meta.group} | Control: ${meta.is_control}" 
     }
