@@ -244,29 +244,31 @@ workflow ATAC_CHIP_PIPELINE {
         ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions, PROFILEPLYR_MACS.out.versions, PROFILEPLYR_OMNI.out.versions)
     }
 
-    // --- MULTIQC ---
+   // --- MULTIQC ---
     ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
     ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
 
-  MULTIQC (
+    def getFile = { it instanceof List ? it[1] : it }
+
+    MULTIQC (
         ch_multiqc_config.collect().ifEmpty([]),
         ch_summary_mqc,
-        FASTQC.out.zip.map{ it[1] }.collect().ifEmpty([]),
-        TRIMGALORE.out.log.map{ it[1] }.collect().ifEmpty([]),
-        BOWTIE2.out.log.map{ it[1] }.collect().ifEmpty([]),
-        PICARD_MARKDUPLICATES.out.metrics.map{ it[1] }.collect().ifEmpty([]),
-        SAMTOOLS_STATS.out.stats.map{ it[1] }.collect().ifEmpty([]),
-        DEEPTOOLS.out.fingerprint_txt.map{ it[1] }.mix(DEEPTOOLS.out.fingerprint_metrics.map{ it[1] }).collect().ifEmpty([]),
+        FASTQC.out.zip.map(getFile).collect().ifEmpty([]),
+        TRIMGALORE.out.log.map(getFile).collect().ifEmpty([]),
+        BOWTIE2.out.log.map(getFile).collect().ifEmpty([]),
+        PICARD_MARKDUPLICATES.out.metrics.map(getFile).collect().ifEmpty([]),
+        SAMTOOLS_STATS.out.stats.map(getFile).collect().ifEmpty([]),
+        DEEPTOOLS.out.fingerprint_txt.map(getFile).mix(DEEPTOOLS.out.fingerprint_metrics.map(getFile)).collect().ifEmpty([]),
         ch_macs_logs_mqc.collect().ifEmpty([]),
-        ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map{ it[1] }.collect().ifEmpty([]),
-        CALC_FRIP.out.frip.map{ it[1] }.collect().ifEmpty([]),
-        ch_all_homer_mqc,
-        ch_all_diffbind_mqc,
-        ch_profileplyr_mqc,
-        LANCEOTRON.out.counts_mqc.map{ it[1] }.mix(FILTER_LANCEOTRON.out.counts_mqc.map{ it[1] }).collect().ifEmpty([]), 
-        OMNIPEAK.out.counts_mqc.map{ it[1] }.collect().ifEmpty([]), 
-        ch_versions_mqc 
+        ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map(getFile).collect().ifEmpty([]),
+        CALC_FRIP.out.frip.map(getFile).collect().ifEmpty([]),
+        ch_all_homer_mqc.flatten().collect().ifEmpty([]),
+        ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
+        ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
+        LANCEOTRON.out.counts_mqc.map(getFile).mix(FILTER_LANCEOTRON.out.counts_mqc.map(getFile)).collect().ifEmpty([]), 
+        OMNIPEAK.out.counts_mqc.map(getFile).collect().ifEmpty([]), 
+        ch_versions_mqc
     )
 }
