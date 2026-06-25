@@ -16,11 +16,12 @@ process OMNIPEAK {
     def control_arg = has_control ? "-c ${control_bam}" : ""
     
     """
-    java --add-modules=jdk.incubator.vector -Xmx8G -jar /home/omnipeak/build/libs/omnipeak-1.5.build.jar analyze \\
-        -t ${ip_bam} \\
-        ${control_arg} \\
+    java --add-modules=jdk.incubator.vector -Xmx16G -jar /home/omnipeak/build/libs/omnipeak-1.5.build.jar analyze \\
+        --threads 4 \\
+        --treatment ${ip_bam} \\
+        --control ${control_bam} \\
         --cs /home/omnipeak/chrom.sizes \\
-        -p ${meta.id}_peaks.bed
+        --peaks ${meta.id}_peaks.bed
 
     PEAK_COUNT=\$(wc -l < ${meta.id}_peaks.bed)
     cat <<EOF > ${meta.id}_omnipeak_mqc.txt
