@@ -46,6 +46,7 @@ workflow ATAC_CHIP_PIPELINE {
     def gtf_file         = null
     def bowtie2_index    = null
     def blacklist_path   = null
+    def chrom_sizes_file = null
     def m_genome         = params.macs_gsize 
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
@@ -60,6 +61,7 @@ workflow ATAC_CHIP_PIPELINE {
         gtf_file       = params.gtf_file
         bowtie2_index  = params.bowtie2_index
         blacklist_path = params.blacklist
+        chrom_sizes_file = params.chrom_sizes
     }
     if (!m_genome || m_genome == 'custom') { m_genome = 'hs' }
 
@@ -155,13 +157,20 @@ workflow ATAC_CHIP_PIPELINE {
 
     // --- OMNIPEAK ---
     if (params.protocol == 'atac') {
-        ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
+        ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, 'null' ] }
     } else {
-        ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, meta, bam ] }
+        ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
         ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
-        ch_omni_input = ch_ip_omni.combine(ch_ct_omni, by: 0).map { cid, meta, ip, ct -> [ meta, ip, ct ] }
+        
+        ch_omni_input = ch_ip_omni.leftJoin(ch_ct_omni)
+            .map { ctrl_id, meta_bam, ctrl_bam -> 
+                [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
+            }
     }
-    OMNIPEAK ( ch_omni_input )
+
+    ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
+    
+    OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
     ch_omni_peaks = OMNIPEAK.out.peaks
 
     // --- FRIP ---
