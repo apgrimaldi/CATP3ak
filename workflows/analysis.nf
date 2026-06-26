@@ -236,9 +236,15 @@ workflow ATAC_CHIP_PIPELINE {
     // --- PROFILEPLYR ---
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
+       
+        ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
+        
+            return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
+        }.collect()
+
         PROFILEPLYR_LANCE ( DIFFBIND_LANCE.out.sig_bed.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "lanceotron" )
         PROFILEPLYR_MACS ( DIFFBIND_MACS.out.sig_bed.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "macs3" )
-        PROFILEPLYR_OMNI ( DIFFBIND_OMNI.out.sig_bed.collect().ifEmpty([]), ch_omni_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "omnipeak" )
+        PROFILEPLYR_OMNI ( DIFFBIND_OMNI.out.sig_bed.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "omnipeak" )
 
         ch_profileplyr_mqc = PROFILEPLYR_LANCE.out.mqc_html.mix(PROFILEPLYR_MACS.out.mqc_html).mix(PROFILEPLYR_OMNI.out.mqc_html).collect().ifEmpty([])
         ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions, PROFILEPLYR_MACS.out.versions, PROFILEPLYR_OMNI.out.versions)
