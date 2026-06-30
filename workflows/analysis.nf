@@ -19,17 +19,13 @@ include { OMNIPEAK } from '../modules/local/omnipeak.nf'
 include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
-
 include { FILTER_LANCEOTRON } from '../modules/local/filter_lanceotron.nf'
-
 include { HOMER_ANNOTATEPEAKS as HOMER_MACS } from '../modules/local/homer_annotate.nf'
 include { HOMER_ANNOTATEPEAKS as HOMER_LANCE } from '../modules/local/homer_annotate.nf'
 include { HOMER_ANNOTATEPEAKS as HOMER_OMNI } from '../modules/local/homer_annotate.nf'
-
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_LANCE } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_OMNI } from '../modules/local/diffbind.nf'
-
 include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
 include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
 include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
@@ -42,6 +38,7 @@ workflow CATP3ak {
     ch_versions = Channel.empty()
     ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
 
+    // --- References Setup ---
     def reference_file   = null
     def gtf_file         = null
     def bowtie2_index    = null
@@ -75,6 +72,7 @@ workflow CATP3ak {
         ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
     }
 
+    // --- Pre-processing ---
     FASTQC ( ch_input )
     TRIMGALORE ( ch_input )
     ch_versions = ch_versions.mix(FASTQC.out.versions, TRIMGALORE.out.versions)
@@ -187,7 +185,7 @@ workflow CATP3ak {
         }
 
         if (!chrom_sizes_file) {
-            exit 1, "ERRORE: Manca il file 'chrom.sizes'! Passalo nel comando con --chrom_sizes /percorso/file"
+            exit 1, "ERROR: Missing 'chrom.sizes' file! Please provide it via --chrom_sizes /path/to/file"
         }
         
         ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
@@ -207,7 +205,7 @@ workflow CATP3ak {
         ch_frip_mqc = CALC_FRIP.out.frip
     }
 
-    // --- ANNOTAZIONE HOMER ---
+    // --- HOMER ANNOTATION ---
     ch_homer_macs_mqc  = Channel.empty()
     ch_homer_lance_mqc = Channel.empty()
     ch_homer_omni_mqc  = Channel.empty()
