@@ -1,18 +1,15 @@
 nextflow.enable.dsl=2
 
-include { ATAC_CHIP_PIPELINE } from './workflows/analysis' 
+// Importa il workflow con il SUO NUOVO NOME dal file analysis.nf
+include { CATP3ak } from './workflows/analysis' 
 
 def create_fastq_channel(LinkedHashMap row, Set known_controls) {
     def meta = [:]
     meta.id         = row.sample.trim()
     meta.antibody   = (row.antibody && row.antibody.trim() != "") ? row.antibody.trim() : 'none'
     meta.control    = (row.control && row.control.trim() != "") ? row.control.trim() : 'none'
-    
-    
-    
     meta.group      = (row.group && row.group.trim() != "") ? row.group.trim() : 'Baseline'
     
-
     if (params.protocol == 'atac') {
         meta.is_control = false
     } else {
@@ -42,8 +39,6 @@ workflow {
     }
 
     log.info """
-
-                                                        
     ===========================================
          C A T P 3 A K   P I P E L I N E
     ===========================================
@@ -59,14 +54,14 @@ workflow {
         .splitCsv(header:true, sep:',')
         .map { row -> create_fastq_channel(row, known_controls) }
     
-    
     ch_input.view { meta, reads -> 
         "LOG: ID: ${meta.id} | Antibody: ${meta.antibody} | Group: ${meta.group} | Control: ${meta.is_control}" 
     }
 
-    ATAC_CHIP_PIPELINE ( ch_input )
+    // Richiama il workflow usando il nuovo acronimo
+    CATP3ak ( ch_input )
     
     workflow.onComplete {
-        log.info "Pipeline completed successfully!"
+        log.info "CATP3ak Pipeline completed successfully!"
     }
 }
