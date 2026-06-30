@@ -34,7 +34,7 @@ include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.n
 include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
 include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
 
-workflow ATAC_CHIP_PIPELINE {
+workflow CATP3ak {
     take:
     ch_input
 
@@ -55,7 +55,6 @@ workflow ATAC_CHIP_PIPELINE {
         gtf_file       = params.gtf_file       ?: gdata.gtf
         bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
-        // MODIFICA CRUCIALE: Prendi il parametro chrom_sizes anche se si usa un genoma noto
         chrom_sizes_file = params.chrom_sizes  ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
@@ -109,145 +108,192 @@ workflow ATAC_CHIP_PIPELINE {
     }
 
     // --- LANCEOTRON ---
-    if (params.protocol == 'atac') {
-        ch_lanceotron_input = ch_bams_branched.ip
-            .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bai, bw -> [ meta, bam, bw, [], [] ] }
-    } else {
-        ch_ip_l6n = ch_bams_branched.ip
-            .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bai, bw -> [ meta.control, meta, bam, bw ] }
+    ch_lanceotron_counts_mqc = Channel.empty()
+    if (!params.skip_lanceotron) {
+        if (params.protocol == 'atac') {
+            ch_lanceotron_input = ch_bams_branched.ip
+                .join(DEEPTOOLS.out.bw_lanceotron)
+                .map { meta, bam, bai, bw -> [ meta, bam, bw, [], [] ] }
+        } else {
+            ch_ip_l6n = ch_bams_branched.ip
+                .join(DEEPTOOLS.out.bw_lanceotron)
+                .map { meta, bam, bai, bw -> [ meta.control, meta, bam, bw ] }
 
-        ch_ctrl_l6n = ch_bams_branched.control
-            .join(DEEPTOOLS.out.bw_lanceotron)
-            .map { meta, bam, bai, bw -> [ meta.id, bam, bw ] }
+            ch_ctrl_l6n = ch_bams_branched.control
+                .join(DEEPTOOLS.out.bw_lanceotron)
+                .map { meta, bam, bai, bw -> [ meta.id, bam, bw ] }
 
-        ch_lanceotron_input = ch_ip_l6n
-            .combine(ch_ctrl_l6n, by: 0)
-            .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw -> 
-                [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ] 
-            }
+            ch_lanceotron_input = ch_ip_l6n
+                .combine(ch_ctrl_l6n, by: 0)
+                .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw -> 
+                    [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ] 
+                }
+        }
+
+        LANCEOTRON ( ch_lanceotron_input )
+        FILTER_LANCEOTRON ( LANCEOTRON.out.peaks, params.lanceotron_threshold ?: 0.5 )
+        ch_lanceotron_counts_mqc = LANCEOTRON.out.counts_mqc.mix(FILTER_LANCEOTRON.out.counts_mqc)
+        ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
     }
 
-    LANCEOTRON ( ch_lanceotron_input )
-    FILTER_LANCEOTRON ( LANCEOTRON.out.peaks, params.lanceotron_threshold ?: 0.5 )
-    ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
-
     // --- MACS3 ---
-    if (params.protocol == 'atac') {
-        ch_macs_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
-        MACS3_ATAC_NARROW ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
-        MACS3_ATAC_BROAD ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
-        ch_narrow_peaks = MACS3_ATAC_NARROW.out.peaks
-        ch_broad_peaks  = MACS3_ATAC_BROAD.out.peaks
-        ch_narrow_counts_mqc = MACS3_ATAC_NARROW.out.count_narrow
-        ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
-        ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.peaks.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.peaks.map{ it[1] })
-    } else {
-        ch_ip_m3 = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, meta, bam ] }
-        ch_ct_m3 = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
-        ch_macs_chip_input = ch_ip_m3.combine(ch_ct_m3, by: 0).map { cid, meta, ip, ct -> [ meta, ip, ct ] }
+    ch_narrow_peaks      = Channel.empty()
+    ch_broad_peaks       = Channel.empty()
+    ch_narrow_counts_mqc = Channel.empty()
+    ch_broad_counts_mqc  = Channel.empty()
+    ch_macs_logs_mqc     = Channel.empty()
 
-        MACS3_CHIP_NARROW ( ch_macs_chip_input, m_genome )
-        MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
-        ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
-        ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
-        ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
-        ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
-        ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
+    if (!params.skip_macs3) {
+        if (params.protocol == 'atac') {
+            ch_macs_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
+            MACS3_ATAC_NARROW ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
+            MACS3_ATAC_BROAD ( ch_macs_input.map{ meta, ip, ctrl -> [meta, ip] }, m_genome )
+            ch_narrow_peaks = MACS3_ATAC_NARROW.out.peaks
+            ch_broad_peaks  = MACS3_ATAC_BROAD.out.peaks
+            ch_narrow_counts_mqc = MACS3_ATAC_NARROW.out.count_narrow
+            ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
+            ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.peaks.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.peaks.map{ it[1] })
+        } else {
+            ch_ip_m3 = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, meta, bam ] }
+            ch_ct_m3 = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
+            ch_macs_chip_input = ch_ip_m3.combine(ch_ct_m3, by: 0).map { cid, meta, ip, ct -> [ meta, ip, ct ] }
+
+            MACS3_CHIP_NARROW ( ch_macs_chip_input, m_genome )
+            MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
+            ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
+            ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
+            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
+            ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
+            ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
+        }
     }
 
     // --- OMNIPEAK ---
-    if (params.protocol == 'atac') {
-        ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, 'null' ] }
-    } else {
-        ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
-        ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
-        
-        ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
-            .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } 
-            .map { ctrl_id, meta_bam, ctrl_bam -> 
-                [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
-            }
-    }
+    ch_omni_peaks      = Channel.empty()
+    ch_omni_counts_mqc = Channel.empty()
 
-    // CONTROLLO
-    if (!chrom_sizes_file) {
-        exit 1, "ERRORE: Manca il file 'chrom.sizes'! Passalo nel comando con --chrom_sizes /percorso/file"
+    if (!params.skip_omnipeak) {
+        if (params.protocol == 'atac') {
+            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, 'null' ] }
+        } else {
+            ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
+            ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
+            
+            ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
+                .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } 
+                .map { ctrl_id, meta_bam, ctrl_bam -> 
+                    [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
+                }
+        }
+
+        if (!chrom_sizes_file) {
+            exit 1, "ERRORE: Manca il file 'chrom.sizes'! Passalo nel comando con --chrom_sizes /percorso/file"
+        }
+        
+        ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
+        
+        OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
+        ch_omni_peaks = OMNIPEAK.out.peaks
+        ch_omni_counts_mqc = OMNIPEAK.out.counts_mqc
     }
-    
-    ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
-    
-    OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
-    ch_omni_peaks = OMNIPEAK.out.peaks
 
     // --- FRIP ---
-    ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam ] }
-        .join(ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] })
-        .map { id, meta, bam, peak -> [ meta, bam, peak ] }
-    CALC_FRIP ( ch_frip_input )
+    ch_frip_mqc = Channel.empty()
+    if (!params.skip_frip && !params.skip_macs3) {
+        ch_frip_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam ] }
+            .join(ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] })
+            .map { id, meta, bam, peak -> [ meta, bam, peak ] }
+        CALC_FRIP ( ch_frip_input )
+        ch_frip_mqc = CALC_FRIP.out.frip
+    }
 
-    // --- ANNOTAZIONE ---
-    ch_homer_macs_mqc = Channel.empty()
+    // --- ANNOTAZIONE HOMER ---
+    ch_homer_macs_mqc  = Channel.empty()
     ch_homer_lance_mqc = Channel.empty()
-    ch_homer_omni_mqc = Channel.empty()
+    ch_homer_omni_mqc  = Channel.empty()
 
     if (!params.skip_homer && reference_file && gtf_file) {
-        ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks).filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
-        ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
-
-        ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
-        ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
-
-        ch_homer_omni_input = ch_omni_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
-        HOMER_OMNI ( "omnipeak", ch_homer_omni_input, file(reference_file), file(gtf_file) )
-        ch_homer_omni_mqc = HOMER_OMNI.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        if (!params.skip_macs3) {
+            ch_homer_macs_input = ch_narrow_peaks.mix(ch_broad_peaks).filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
+            HOMER_MACS ( "macs3", ch_homer_macs_input, file(reference_file), file(gtf_file) )
+            ch_homer_macs_mqc = HOMER_MACS.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        }
+        if (!params.skip_lanceotron) {
+            ch_homer_lance_input = FILTER_LANCEOTRON.out.filtered_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
+            HOMER_LANCE ( "lanceotron", ch_homer_lance_input, file(reference_file), file(gtf_file) )
+            ch_homer_lance_mqc = HOMER_LANCE.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        }
+        if (!params.skip_omnipeak) {
+            ch_homer_omni_input = ch_omni_peaks.filter { meta, peak -> peak != null && peak.exists() && peak.size() > 0 }
+            HOMER_OMNI ( "omnipeak", ch_homer_omni_input, file(reference_file), file(gtf_file) )
+            ch_homer_omni_mqc = HOMER_OMNI.out.stats_mqc.map{ it[1] }.collect().ifEmpty([])
+        }
     }
+
     // --- DIFFBIND ---
-    ch_diffbind_macs_mqc = Channel.empty()
+    ch_diffbind_macs_mqc  = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
-    ch_diffbind_omni_mqc = Channel.empty()
+    ch_diffbind_omni_mqc  = Channel.empty()
+    
+    ch_diffbind_macs_sig  = Channel.empty()
+    ch_diffbind_lance_sig = Channel.empty()
+    ch_diffbind_omni_sig  = Channel.empty()
 
     if (!params.skip_diffbind) {
-        // MACS3
-        ch_diffbind_macs_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
-        ch_db_macs_samplesheet = ch_diffbind_macs_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},narrow" }.collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
-        DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
-        ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
-        ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
+        if (!params.skip_macs3) {
+            ch_diffbind_macs_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( ch_narrow_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
+            ch_db_macs_samplesheet = ch_diffbind_macs_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},narrow" }.collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+            DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
+            ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
+            ch_diffbind_macs_sig = DIFFBIND_MACS.out.sig_bed
+            ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
+        }
 
-        // Lanceotron
-        ch_diffbind_lance_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
-        ch_db_lance_samplesheet = ch_diffbind_lance_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},lanceotron" }.collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
-        DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
-        ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
-        ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
+        if (!params.skip_lanceotron) {
+            ch_diffbind_lance_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( FILTER_LANCEOTRON.out.filtered_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
+            ch_db_lance_samplesheet = ch_diffbind_lance_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},lanceotron" }.collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+            DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
+            ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
+            ch_diffbind_lance_sig = DIFFBIND_LANCE.out.sig_bed
+            ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
+        }
 
-        // Omnipeak
-        ch_diffbind_omni_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( ch_omni_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
-        ch_db_omni_samplesheet = ch_diffbind_omni_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},bed" }.collectFile(name: 'samplesheet_diffbind_omnipeak.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
-        DIFFBIND_OMNI ( "omnipeak", ch_db_omni_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_omni_peaks.map{ it[1] }.collect() )
-        ch_diffbind_omni_mqc = DIFFBIND_OMNI.out.mqc_html.mix(DIFFBIND_OMNI.out.mqc_txt).collect().ifEmpty([])
-        ch_versions = ch_versions.mix(DIFFBIND_OMNI.out.versions)
+        if (!params.skip_omnipeak) {
+            ch_diffbind_omni_prep = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.id, meta, bam, bai ] }.join( ch_omni_peaks.map { meta, peak -> [ meta.id, peak ] } ).map { id, meta, bam, bai, peak -> [ meta, bam, bai, peak ] }
+            ch_db_omni_samplesheet = ch_diffbind_omni_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},bed" }.collectFile(name: 'samplesheet_diffbind_omnipeak.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
+            DIFFBIND_OMNI ( "omnipeak", ch_db_omni_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_omni_peaks.map{ it[1] }.collect() )
+            ch_diffbind_omni_mqc = DIFFBIND_OMNI.out.mqc_html.mix(DIFFBIND_OMNI.out.mqc_txt).collect().ifEmpty([])
+            ch_diffbind_omni_sig = DIFFBIND_OMNI.out.sig_bed
+            ch_versions = ch_versions.mix(DIFFBIND_OMNI.out.versions)
+        }
     }
 
     // --- PROFILEPLYR ---
     ch_profileplyr_mqc = Channel.empty()
     if (!params.skip_profileplyr) {
-       
-        ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
         
-            return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
-        }.collect()
+        if (!params.skip_lanceotron) {
+            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "lanceotron" )
+            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_LANCE.out.mqc_html)
+            ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions)
+        }
 
-        PROFILEPLYR_LANCE ( DIFFBIND_LANCE.out.sig_bed.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "lanceotron" )
-        PROFILEPLYR_MACS ( DIFFBIND_MACS.out.sig_bed.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "macs3" )
-        PROFILEPLYR_OMNI ( DIFFBIND_OMNI.out.sig_bed.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "omnipeak" )
+        if (!params.skip_macs3) {
+            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "macs3" )
+            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_MACS.out.mqc_html)
+            ch_versions = ch_versions.mix(PROFILEPLYR_MACS.out.versions)
+        }
 
-        ch_profileplyr_mqc = PROFILEPLYR_LANCE.out.mqc_html.mix(PROFILEPLYR_MACS.out.mqc_html).mix(PROFILEPLYR_OMNI.out.mqc_html).collect().ifEmpty([])
-        ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions, PROFILEPLYR_MACS.out.versions, PROFILEPLYR_OMNI.out.versions)
+        if (!params.skip_omnipeak) {
+            ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
+                return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
+            }.collect()
+            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "omnipeak" )
+            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_OMNI.out.mqc_html)
+            ch_versions = ch_versions.mix(PROFILEPLYR_OMNI.out.versions)
+        }
+
+        ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
     }
 
    // --- MULTIQC ---
@@ -269,12 +315,12 @@ workflow ATAC_CHIP_PIPELINE {
         DEEPTOOLS.out.fingerprint_txt.map(getFile).mix(DEEPTOOLS.out.fingerprint_metrics.map(getFile)).collect().ifEmpty([]),
         ch_macs_logs_mqc.collect().ifEmpty([]),
         ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map(getFile).collect().ifEmpty([]),
-        CALC_FRIP.out.frip.map(getFile).collect().ifEmpty([]),
+        ch_frip_mqc.map(getFile).collect().ifEmpty([]),
         ch_all_homer_mqc.flatten().collect().ifEmpty([]),
         ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
         ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
-        LANCEOTRON.out.counts_mqc.map(getFile).mix(FILTER_LANCEOTRON.out.counts_mqc.map(getFile)).collect().ifEmpty([]), 
-        OMNIPEAK.out.counts_mqc.map(getFile).collect().ifEmpty([]), 
+        ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
+        ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
         ch_versions_mqc
     )
 }
