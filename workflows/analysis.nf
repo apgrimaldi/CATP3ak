@@ -172,7 +172,7 @@ workflow CATP3ak {
 
     if (!params.skip_omnipeak) {
         if (params.protocol == 'atac') {
-            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, 'null' ] }
+            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
         } else {
             ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
             ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
