@@ -172,15 +172,18 @@ workflow CATP3ak {
 
     if (!params.skip_omnipeak) {
         if (params.protocol == 'atac') {
-            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, 'null' ] }
+            
+            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, [bam] ] }
         } else {
+            
             ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
             ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
             
             ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
                 .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } 
                 .map { ctrl_id, meta_bam, ctrl_bam -> 
-                    [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
+                    def bams_list = ctrl_bam ? [meta_bam[1], ctrl_bam] : [meta_bam[1]]
+                    [ meta_bam[0], bams_list ] 
                 }
         }
 
