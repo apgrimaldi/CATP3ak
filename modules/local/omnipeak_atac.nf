@@ -1,4 +1,4 @@
-process OMNIPEAK {
+process OMNIPEAK_ATAC {
     tag "$meta.id"
     label 'process_high'
     container 'biohaz/omnipeak:latest'
