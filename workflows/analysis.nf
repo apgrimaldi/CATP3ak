@@ -16,6 +16,7 @@ include { CALC_FRIP } from '../modules/local/calc_frip.nf'
 include { DEEPTOOLS } from '../modules/local/deeptools.nf'
 include { LANCEOTRON } from '../modules/local/lanceotron.nf'
 include { OMNIPEAK } from '../modules/local/omnipeak.nf'
+include { OMNIPEAK_ATAC } from '../modules/local/omnipeak_atac.nf'
 include { MULTIQC } from '../modules/local/multiqc.nf'
 include { SAMTOOLS_INDEX } from '../modules/local/samtools_index.nf'
 include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_FINAL } from '../modules/local/samtools_index.nf'
@@ -171,28 +172,36 @@ workflow CATP3ak {
     ch_omni_counts_mqc = Channel.empty()
 
     if (!params.skip_omnipeak) {
+        if (!chrom_sizes_file) {
+            exit 1, "ERROR: Missing 'chrom.sizes' file! Please provide it via --chrom_sizes /path/to/file"
+        }
+        ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
+
         if (params.protocol == 'atac') {
-            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam, [] ] }
+            // ATAC: Passa solo [meta, bam] al modulo dedicato
+            ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }
+            
+            OMNIPEAK_ATAC ( ch_omni_input, ch_chrom_sizes )
+            ch_omni_peaks = OMNIPEAK_ATAC.out.peaks
+            ch_omni_counts_mqc = OMNIPEAK_ATAC.out.counts_mqc
+            ch_versions = ch_versions.mix(OMNIPEAK_ATAC.out.versions)
+            
         } else {
+            // CHIP: Passa [meta, ip_bam, ctrl_bam] al modulo classico
             ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
             ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
             
             ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
-                .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null } 
+                .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null && ctrl_bam != null } 
                 .map { ctrl_id, meta_bam, ctrl_bam -> 
-                    [ meta_bam[0], meta_bam[1], ctrl_bam ?: 'null' ] 
+                    [ meta_bam[0], meta_bam[1], ctrl_bam ] 
                 }
+                
+            OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
+            ch_omni_peaks = OMNIPEAK.out.peaks
+            ch_omni_counts_mqc = OMNIPEAK.out.counts_mqc
+            ch_versions = ch_versions.mix(OMNIPEAK.out.versions)
         }
-
-        if (!chrom_sizes_file) {
-            exit 1, "ERROR: Missing 'chrom.sizes' file! Please provide it via --chrom_sizes /path/to/file"
-        }
-        
-        ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
-        
-        OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
-        ch_omni_peaks = OMNIPEAK.out.peaks
-        ch_omni_counts_mqc = OMNIPEAK.out.counts_mqc
     }
 
     // --- FRIP ---
