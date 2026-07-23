@@ -4,8 +4,7 @@ process OMNIPEAK {
     container 'biohaz/omnipeak:latest'
 
     input:
-    // Sostituito i due path separati con una lista dinamica di BAM
-    tuple val(meta), path(bams)
+    tuple val(meta), path(ip_bam), path(control_bam)
     path chrom_sizes
 
     output:
@@ -14,16 +13,11 @@ process OMNIPEAK {
     path "versions.yml"                 , emit: versions
 
     script:
-    // LOGICA INTELLIGENTE: Il primo file è sempre il treatment. 
-    // Se c'è un secondo file, allora è il control.
-    def ip_bam = bams[0]
-    def ctrl_arg = bams.size() > 1 ? "--control \"${bams[1]}\"" : ""
-
     """
     java --add-modules=jdk.incubator.vector -Xmx16G -jar /home/omnipeak/build/libs/omnipeak-1.5.build.jar analyze \\
         --threads 4 \\
         --treatment "${ip_bam}" \\
-        ${ctrl_arg} \\
+        --control "${control_bam}" \\
         --cs ${chrom_sizes} \\
         --peaks "${meta.id}_peaks.bed" \\
         > omnipeak.log 2>&1
