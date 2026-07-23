@@ -178,7 +178,7 @@ workflow CATP3ak {
         ch_chrom_sizes = Channel.fromPath(chrom_sizes_file, checkIfExists: true).collect()
 
         if (params.protocol == 'atac') {
-            // ATAC: Passa solo [meta, bam] al modulo dedicato
+            // ATAC
             ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }
             
             OMNIPEAK_ATAC ( ch_omni_input, ch_chrom_sizes )
@@ -187,7 +187,7 @@ workflow CATP3ak {
             ch_versions = ch_versions.mix(OMNIPEAK_ATAC.out.versions)
             
         } else {
-            // CHIP: Passa [meta, ip_bam, ctrl_bam] al modulo classico
+            // CHIP
             ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
             ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
             
