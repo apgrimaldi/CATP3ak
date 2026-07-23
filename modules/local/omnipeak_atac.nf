@@ -4,7 +4,7 @@ process OMNIPEAK_ATAC {
     container 'biohaz/omnipeak:latest'
 
     input:
-    tuple val(meta), path(ip_bam), path(control_bam)
+    tuple val(meta), path(ip_bam)
     path chrom_sizes
 
     output:
