@@ -48,18 +48,18 @@ workflow CATP3ak {
     def m_genome         = params.macs_gsize 
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
-        def gdata        = params.genomes[params.genome]
-        reference_file   = params.reference_file ?: gdata.fasta
-        gtf_file         = params.gtf_file       ?: gdata.gtf
-        bowtie2_index    = params.bowtie2_index  ?: gdata.bowtie2
-        blacklist_path   = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
-        chrom_sizes_file = params.chrom_sizes    ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
+        def gdata    = params.genomes[params.genome]
+        reference_file = params.reference_file ?: gdata.fasta
+        gtf_file       = params.gtf_file       ?: gdata.gtf
+        bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
+        blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
+        chrom_sizes_file = params.chrom_sizes  ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
-        reference_file   = params.reference_file
-        gtf_file         = params.gtf_file
-        bowtie2_index    = params.bowtie2_index
-        blacklist_path   = params.blacklist
+        reference_file = params.reference_file
+        gtf_file       = params.gtf_file
+        bowtie2_index  = params.bowtie2_index
+        blacklist_path = params.blacklist
         chrom_sizes_file = params.chrom_sizes
     }
     if (!m_genome || m_genome == 'custom') { m_genome = 'hs' }
@@ -306,7 +306,7 @@ workflow CATP3ak {
    // --- MULTIQC ---
     ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
-    ch_summary_mqc = Channel.of("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
+    ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
 
     def getFile = { it instanceof List ? it[1] : it }
