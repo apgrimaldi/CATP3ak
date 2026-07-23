@@ -138,6 +138,7 @@ nextflow run apgrimaldi/CATP3ak \
 | `--skip_homer`           | Skip HOMER annotation                             |
 | `--skip_diffbind`        | Skip DiffBind analysis                            |
 | `--skip_profileplyr`     | Skip Profileplyr analysis                         |
+| `--skip_omnipeak`        | Skip Omnipeak analysis                            |
 
 ---
 
@@ -149,12 +150,12 @@ CATP3ak supports custom reference genomes.
 
 | Parameter         | Description                           |
 | ----------------- | ------------------------------------- |
-| `--reference_file`    | Reference genome FASTA file           |
+| `--reference_file`| Reference genome FASTA file           |
 | `--gtf_file`      | Gene annotation GTF file              |
 | `--macs_gsize`    | Effective genome size for MACS3       |
 | `--blacklist`     | BED file containing blacklist regions |
 | `--bowtie2_index` | Pre-built Bowtie2 index               |
-
+| `--chrome_sizes`  | Chromosome sizes for Omnipeak         |
 ### Example
 
 ```bash
@@ -177,17 +178,17 @@ nextflow run apgrimaldi/CATP3ak \
 ### ChIP-seq Example
 
 ```csv
-sample,fastq_1,fastq_2,antibody,control
-IP_H3K27ac_1,data/IP_H3K27ac_1.fastq.gz,,H3K27ac,Input_1
-Input_1,data/Input_1.fastq.gz,,,
+sample,fastq_1,fastq_2,antibody,control,group
+IP_gH2AX_DOXO_1,data/IP_gH2AX_DOXO_1.fastq.gz,,gH2AX,IP_IgG_DOXO_1,DOXO
+IP_IgG_DOXO_1,data/IP_gH2AX_DOXO_1.fastq.gz,,gH2AX,,DOXO
 ```
 
 ### ATAC-seq Example
 
 ```csv
-sample,fastq_1,fastq_2
-ATAC_1,data/ATAC_1_R1.fastq.gz,data/ATAC_1_R2.fastq.gz
-ATAC_2,data/ATAC_2_R1.fastq.gz,data/ATAC_2_R2.fastq.gz
+sample,fastq_1,fastq_2,antibody,control,group
+ATAC_1,data/ATAC_1_R1.fastq.gz,data/ATAC_1_R2.fastq.gz,ATAC,,
+ATAC_2,data/ATAC_2_R1.fastq.gz,data/ATAC_2_R2.fastq.gz,ATAC,,
 ```
 
 ### Samplesheet Columns
@@ -199,6 +200,7 @@ ATAC_2,data/ATAC_2_R1.fastq.gz,data/ATAC_2_R2.fastq.gz
 | `fastq_2`    | Read 2 FASTQ file (leave empty for Single-End data) |
 | `antibody`   | Antibody name (ChIP-seq only)                       |
 | `control`    | Matching control sample                             |
+| `group`      | Matching group sample                               |
 
 
 ---
@@ -239,16 +241,19 @@ results/
 │   ├── narrow/
 │   ├── broad/
 │   └── frip_stats/
-├── 09_annotation/
+├── 09_omnipeak/
+├── 10_annotation/
+│   ├── macs/
+│   ├── lanceotron/
+│   └── omnipeak/
+├── 11_diffbind/
+│   ├── macs/
+│   ├── lanceotron/
+│   └── omnipeak/
+├── 12_profileplyr/
 │   ├── macs/
 │   └── lanceotron/
-├── 10_diffbind/
-│   ├── macs/
-│   └── lanceotron/
-├── 11_profileplyr/
-│   ├── macs/
-│   └── lanceotron/
-└── 12_MultiQC_Report/
+└── 13_MultiQC_Report/
 ```
 
 ---
