@@ -1,7 +1,7 @@
 process MACS3_POOL {
 tag "$meta.id"
 label 'process_high'
-container 'quay.io/biocontainers/macs3:3.0.0a7--py310h5624777_1'
+container 'quay.io/biocontainers/macs3:3.0.1--py311h0152c62_3'
 
 input:
 tuple val(meta), path(ip_bams), path(control_bams)
