@@ -22,13 +22,11 @@ macs3 callpeak \\
     -c ${control_bams} \\
     -f BAM \\
     -g ${macs_gsize} \\
-    -n ${meta.id} \\${args}
+    -n ${meta.id} ${args}
 
 cat <<-END_VERSIONS > versions.yml
 "${task.process}":
     macs3: \$(macs3 --version | sed -e "s/macs3 //g")
 END_VERSIONS
 """
-
-
 }
