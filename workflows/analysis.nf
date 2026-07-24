@@ -12,7 +12,7 @@ include { MACS3_ATAC_NARROW } from '../modules/local/macs3_atac_narrow.nf'
 include { MACS3_ATAC_BROAD } from '../modules/local/macs3_atac_broad.nf'
 include { MACS3_CHIP_NARROW } from '../modules/local/macs3_chip_narrow.nf'
 include { MACS3_CHIP_BROAD } from '../modules/local/macs3_chip_broad.nf'
-include { MACS3_POOL } from '../modules/local/macs3_pool.nf'
+include { MACS3_GROUP } from '../modules/local/macs3_group.nf'
 include { CALC_FRIP } from '../modules/local/calc_frip.nf'
 include { DEEPTOOLS } from '../modules/local/deeptools.nf'
 include { LANCEOTRON } from '../modules/local/lanceotron.nf'
@@ -113,7 +113,7 @@ workflow CATP3ak {
         if (params.protocol == 'atac') {
             ch_lanceotron_input = ch_bams_branched.ip
                 .join(DEEPTOOLS.out.bw_lanceotron)
-                .map { meta, bam, bai, bw -> [ meta, bam, bw, [], [] ] }
+                .map { meta, bam, bw -> [ meta, bam, bw, [], [] ] }
         } else {
             ch_ip_l6n = ch_bams_branched.ip
                 .join(DEEPTOOLS.out.bw_lanceotron)
@@ -164,8 +164,8 @@ workflow CATP3ak {
             ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
             ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
             
-           // ESECUZIONE 2: ChIP Pooled
-            ch_ip_pool = ch_bams_branched.ip
+           // ESECUZIONE 2: ChIP Grouped
+            ch_ip_group = ch_bams_branched.ip
                 .map { meta, bam, bai -> 
                     // Se antibody o condition mancano, usa group o id
                     def anti = meta.antibody ?: "IP"
@@ -175,7 +175,7 @@ workflow CATP3ak {
                 }
                 .groupTuple(by: 0)
                 
-            ch_ct_pool = ch_bams_branched.control
+            ch_ct_group = ch_bams_branched.control
                 .map { meta, bam, bai -> 
                     def anti = meta.antibody ?: "IP" // Se non l'hai messo nei controlli, spero ci sia il 'group'
                     def cond = meta.condition ?: "cond"
@@ -184,23 +184,23 @@ workflow CATP3ak {
                 }
                 .groupTuple(by: 0)
 
-            ch_macs_pool_input = ch_ip_pool.join(ch_ct_pool, by: 0)
+            ch_macs_group_input = ch_ip_group.join(ch_ct_group, by: 0)
                 .map { group_id, metas, ip_bams, ctrl_bams -> 
                     def new_meta = metas[0].clone()
-                    new_meta.id = group_id + "_pooled"
+                    new_meta.id = group_id + "_grouped"
                     [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ] 
                 }
 
-          MACS3_POOL ( ch_macs_pool_input, m_genome )
+          MACS3_GROUP ( ch_macs_group_input, m_genome )
             
             
             ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
             ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }
                                 .mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
-                                .mix(MACS3_POOL.out.xls.map{ it[1] })
+                                .mix(MACS3_GROUP.out.xls.map{ it[1] })
                                 
-            ch_versions = ch_versions.mix(MACS3_POOL.out.versions)
+            ch_versions = ch_versions.mix(MACS3_GROUP.out.versions)
         }
     }
 
