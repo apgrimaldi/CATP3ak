@@ -49,18 +49,18 @@ workflow CATP3ak {
     def m_genome         = params.macs_gsize 
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
-        def gdata    = params.genomes[params.genome]
-        reference_file = params.reference_file ?: gdata.fasta
-        gtf_file       = params.gtf_file       ?: gdata.gtf
-        bowtie2_index  = params.bowtie2_index  ?: gdata.bowtie2
-        blacklist_path = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
-        chrom_sizes_file = params.chrom_sizes  ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
+        def gdata        = params.genomes[params.genome]
+        reference_file   = params.reference_file ?: gdata.fasta
+        gtf_file         = params.gtf_file       ?: gdata.gtf
+        bowtie2_index    = params.bowtie2_index  ?: gdata.bowtie2
+        blacklist_path   = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
+        chrom_sizes_file = params.chrom_sizes    ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
-        reference_file = params.reference_file
-        gtf_file       = params.gtf_file
-        bowtie2_index  = params.bowtie2_index
-        blacklist_path = params.blacklist
+        reference_file   = params.reference_file
+        gtf_file         = params.gtf_file
+        bowtie2_index    = params.bowtie2_index
+        blacklist_path   = params.blacklist
         chrom_sizes_file = params.chrom_sizes
     }
     if (!m_genome || m_genome == 'custom') { m_genome = 'hs' }
@@ -136,7 +136,7 @@ workflow CATP3ak {
         ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
     }
 
-   // --- MACS3 (SINGOLO + POOL) ---
+    // --- MACS3 ---
     ch_narrow_peaks      = Channel.empty()
     ch_broad_peaks       = Channel.empty()
     ch_narrow_counts_mqc = Channel.empty()
@@ -164,26 +164,27 @@ workflow CATP3ak {
             ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
             ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
             
-            // ESECUZIONE 2: ChIP Pooled (Gruppo vs Gruppo)
-            ch_ip_pool = ch_bams_branched.ip
-                .map { meta, bam, bai -> [ meta.condition ?: meta.group ?: meta.id, meta, bam ] }
-                .groupTuple(by: 0)
+            // ESECUZIONE 2: ChIP Pooled (Anticorpo + Condizione)
+            ch_ip_with_ctrl = ch_bams_branched.ip
+                .map { meta, bam, bai -> [ meta.control, meta, bam ] }
+                .combine(ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }, by: 0)
             
-            ch_ct_pool = ch_bams_branched.control
-                .map { meta, bam, bai -> [ meta.condition ?: meta.group ?: meta.id, bam ] }
+            ch_macs_pool_input = ch_ip_with_ctrl
+                .map { ctrl_id, ip_meta, ip_bam, ctrl_bam ->
+                    def pool_id = "${ip_meta.antibody}_${ip_meta.condition}"
+                    [ pool_id, ip_meta, ip_bam, ctrl_bam ]
+                }
                 .groupTuple(by: 0)
-
-            ch_macs_pool_input = ch_ip_pool.combine(ch_ct_pool, by: 0)
-                .map { group_id, metas, ip_bams, ctrl_bams -> 
+                .map { pool_id, metas, ip_bams, ctrl_bams ->
                     def new_meta = metas[0].clone()
-                    new_meta.id = group_id + "_pooled" // Evitiamo collisioni di nome in MultiQC
-                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten() ] 
+                    new_meta.id = pool_id + "_pooled"
+                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ]
                 }
 
             MACS3_POOL ( ch_macs_pool_input, m_genome )
             
-            // Uniamo i log e i conteggi sia del singolo che del pooled per MultiQC
-            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow.mix(MACS3_POOL.out.counts_mqc)
+            // QUI ABBIAMO CORRETTO L'OUTPUT IN .count_narrow
+            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow.mix(MACS3_POOL.out.count_narrow)
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
             ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }
                                 .mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
@@ -329,31 +330,33 @@ workflow CATP3ak {
         ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
     }
 
-  // --- MULTIQC ---
-    ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
-    ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
-    ch_summary_mqc = Channel.of("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
-    ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
+    // --- MULTIQC ---
+    if (!params.skip_multiqc) {
+        ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
+        ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
+        ch_summary_mqc = Channel.of("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
+        ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
 
-    def getFile = { it instanceof List ? it[1] : it }
+        def getFile = { it instanceof List ? it[1] : it }
 
-    MULTIQC (
-        ch_multiqc_config.collect().ifEmpty([]),
-        ch_summary_mqc,
-        FASTQC.out.zip.map(getFile).collect().ifEmpty([]),
-        TRIMGALORE.out.log.map(getFile).collect().ifEmpty([]),
-        BOWTIE2.out.log.map(getFile).collect().ifEmpty([]),
-        PICARD_MARKDUPLICATES.out.metrics.map(getFile).collect().ifEmpty([]),
-        SAMTOOLS_STATS.out.stats.map(getFile).collect().ifEmpty([]),
-        DEEPTOOLS.out.fingerprint_txt.map(getFile).mix(DEEPTOOLS.out.fingerprint_metrics.map(getFile)).collect().ifEmpty([]),
-        ch_macs_logs_mqc.collect().ifEmpty([]),
-        ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map(getFile).collect().ifEmpty([]),
-        ch_frip_mqc.map(getFile).collect().ifEmpty([]),
-        ch_all_homer_mqc.flatten().collect().ifEmpty([]),
-        ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
-        ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
-        ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
-        ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
-        ch_versions_mqc
-    )
+        MULTIQC (
+            ch_multiqc_config.collect().ifEmpty([]),
+            ch_summary_mqc,
+            FASTQC.out.zip.map(getFile).collect().ifEmpty([]),
+            TRIMGALORE.out.log.map(getFile).collect().ifEmpty([]),
+            BOWTIE2.out.log.map(getFile).collect().ifEmpty([]),
+            PICARD_MARKDUPLICATES.out.metrics.map(getFile).collect().ifEmpty([]),
+            SAMTOOLS_STATS.out.stats.map(getFile).collect().ifEmpty([]),
+            DEEPTOOLS.out.fingerprint_txt.map(getFile).mix(DEEPTOOLS.out.fingerprint_metrics.map(getFile)).collect().ifEmpty([]),
+            ch_macs_logs_mqc.collect().ifEmpty([]),
+            ch_narrow_counts_mqc.mix(ch_broad_counts_mqc).map(getFile).collect().ifEmpty([]),
+            ch_frip_mqc.map(getFile).collect().ifEmpty([]),
+            ch_all_homer_mqc.flatten().collect().ifEmpty([]),
+            ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
+            ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
+            ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
+            ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
+            ch_versions_mqc
+        )
+    }
 }
