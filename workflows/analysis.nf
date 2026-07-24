@@ -12,6 +12,7 @@ include { MACS3_ATAC_NARROW } from '../modules/local/macs3_atac_narrow.nf'
 include { MACS3_ATAC_BROAD } from '../modules/local/macs3_atac_broad.nf'
 include { MACS3_CHIP_NARROW } from '../modules/local/macs3_chip_narrow.nf'
 include { MACS3_CHIP_BROAD } from '../modules/local/macs3_chip_broad.nf'
+include { MACS3_POOL } from '../modules/local/macs3_pool.nf'
 include { CALC_FRIP } from '../modules/local/calc_frip.nf'
 include { DEEPTOOLS } from '../modules/local/deeptools.nf'
 include { LANCEOTRON } from '../modules/local/lanceotron.nf'
@@ -135,7 +136,7 @@ workflow CATP3ak {
         ch_versions = ch_versions.mix(LANCEOTRON.out.versions)
     }
 
-    // --- MACS3 ---
+   // --- MACS3 (SINGOLO + POOL) ---
     ch_narrow_peaks      = Channel.empty()
     ch_broad_peaks       = Channel.empty()
     ch_narrow_counts_mqc = Channel.empty()
@@ -153,6 +154,7 @@ workflow CATP3ak {
             ch_broad_counts_mqc  = MACS3_ATAC_BROAD.out.count_broad
             ch_macs_logs_mqc = MACS3_ATAC_NARROW.out.peaks.map{ it[1] }.mix(MACS3_ATAC_BROAD.out.peaks.map{ it[1] })
         } else {
+            // ESECUZIONE 1: ChIP Singolo (Replica vs Replica)
             ch_ip_m3 = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, meta, bam ] }
             ch_ct_m3 = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
             ch_macs_chip_input = ch_ip_m3.combine(ch_ct_m3, by: 0).map { cid, meta, ip, ct -> [ meta, ip, ct ] }
@@ -161,9 +163,33 @@ workflow CATP3ak {
             MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
             ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
             ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
-            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
+            
+            // ESECUZIONE 2: ChIP Pooled (Gruppo vs Gruppo)
+            ch_ip_pool = ch_bams_branched.ip
+                .map { meta, bam, bai -> [ meta.condition ?: meta.group ?: meta.id, meta, bam ] }
+                .groupTuple(by: 0)
+            
+            ch_ct_pool = ch_bams_branched.control
+                .map { meta, bam, bai -> [ meta.condition ?: meta.group ?: meta.id, bam ] }
+                .groupTuple(by: 0)
+
+            ch_macs_pool_input = ch_ip_pool.combine(ch_ct_pool, by: 0)
+                .map { group_id, metas, ip_bams, ctrl_bams -> 
+                    def new_meta = metas[0].clone()
+                    new_meta.id = group_id + "_pooled" // Evitiamo collisioni di nome in MultiQC
+                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten() ] 
+                }
+
+            MACS3_POOL ( ch_macs_pool_input, m_genome )
+            
+            // Uniamo i log e i conteggi sia del singolo che del pooled per MultiQC
+            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow.mix(MACS3_POOL.out.counts_mqc)
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
-            ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }.mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
+            ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }
+                                .mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
+                                .mix(MACS3_POOL.out.xls.map{ it[1] })
+                                
+            ch_versions = ch_versions.mix(MACS3_POOL.out.versions)
         }
     }
 
@@ -303,10 +329,10 @@ workflow CATP3ak {
         ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
     }
 
-   // --- MULTIQC ---
+  // --- MULTIQC ---
     ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
     ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
-    ch_summary_mqc = Channel.value("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
+    ch_summary_mqc = Channel.of("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
     ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
 
     def getFile = { it instanceof List ? it[1] : it }
