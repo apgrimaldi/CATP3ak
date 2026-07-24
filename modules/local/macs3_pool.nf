@@ -14,15 +14,9 @@ path "*_peaks.xls"                         , emit: count_narrow
 path "versions.yml"                        , emit: versions
 
 script:
-// Qui definiamo i parametri avanzati che hai richiesto.
-// In futuro, puoi anche sovrascriverli da nextflow.config usando ext.args
 def args = task.ext.args ?: '--nomodel --shift -100 --extsize 200 -B'
 
 """
-# Nextflow trasforma automaticamente le liste "ip_bams" e "control_bams" in 
-# stringhe separate da spazio (es: "file1.bam file2.bam"), che e' il formato 
-# esatto richiesto da MACS3 per fare il pooling!
-
 macs3 callpeak \\
     -t ${ip_bams} \\
     -c ${control_bams} \\
