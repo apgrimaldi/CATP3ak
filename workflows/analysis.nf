@@ -164,21 +164,31 @@ workflow CATP3ak {
             ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
             ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
             
-            // ESECUZIONE 2: ChIP Pooled (Anticorpo + Condizione)
-            ch_ip_with_ctrl = ch_bams_branched.ip
-                .map { meta, bam, bai -> [ meta.control, meta, bam ] }
-                .combine(ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }, by: 0)
-            
-            ch_macs_pool_input = ch_ip_with_ctrl
-                .map { ctrl_id, ip_meta, ip_bam, ctrl_bam ->
-                    def pool_id = "${ip_meta.antibody}_${ip_meta.condition}"
-                    [ pool_id, ip_meta, ip_bam, ctrl_bam ]
+           // ESECUZIONE 2: ChIP Pooled
+            ch_ip_pool = ch_bams_branched.ip
+                .map { meta, bam, bai -> 
+                    // Se antibody o condition mancano, usa group o id
+                    def anti = meta.antibody ?: "IP"
+                    def cond = meta.condition ?: "cond"
+                    def group_id = meta.group ?: "${anti}_${cond}"
+                    [ group_id, meta, bam ] 
                 }
                 .groupTuple(by: 0)
-                .map { pool_id, metas, ip_bams, ctrl_bams ->
+                
+            ch_ct_pool = ch_bams_branched.control
+                .map { meta, bam, bai -> 
+                    def anti = meta.antibody ?: "IP" // Se non l'hai messo nei controlli, spero ci sia il 'group'
+                    def cond = meta.condition ?: "cond"
+                    def group_id = meta.group ?: "${anti}_${cond}"
+                    [ group_id, bam ] 
+                }
+                .groupTuple(by: 0)
+
+            ch_macs_pool_input = ch_ip_pool.join(ch_ct_pool, by: 0)
+                .map { group_id, metas, ip_bams, ctrl_bams -> 
                     def new_meta = metas[0].clone()
-                    new_meta.id = pool_id + "_pooled"
-                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ]
+                    new_meta.id = group_id + "_pooled"
+                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ] 
                 }
 
             MACS3_POOL ( ch_macs_pool_input, m_genome )
