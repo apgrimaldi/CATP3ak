@@ -14,7 +14,7 @@ process MACS3_GROUP {
     path "versions.yml"                        , emit: versions
 
     script:
-    def args = task.ext.args ?: '--nomodel --shift -100 --extsize 200 -B'
+    def args = task.ext.args ?: ''
 
     """
     macs3 callpeak \\
