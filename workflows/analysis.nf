@@ -191,10 +191,10 @@ workflow CATP3ak {
                     [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ] 
                 }
 
-            MACS3_POOL ( ch_macs_pool_input, m_genome )
+          MACS3_POOL ( ch_macs_pool_input, m_genome )
             
-            // QUI ABBIAMO CORRETTO L'OUTPUT IN .count_narrow
-            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow.mix(MACS3_POOL.out.count_narrow)
+            
+            ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
             ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }
                                 .mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
