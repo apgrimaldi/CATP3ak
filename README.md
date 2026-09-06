@@ -4,92 +4,58 @@
   </picture>
 </h1>
 
-# CATP3ak
-
-### ChiP-Seq and ATAC-Seq callpeakers
+# CATP3ak: ChIP-Seq and ATAC-Seq callpeakers
 
 A Nextflow DSL2 pipeline for comprehensive ATAC-seq and ChIP-seq data analysis.
 
 CATP3ak was developed to improve peak identification by integrating multiple complementary peak-calling approaches within a single reproducible workflow. Starting from raw sequencing data, the pipeline performs quality control, preprocessing, alignment, duplicate removal, blacklist filtering, peak calling, annotation, differential binding analysis, signal profiling, and reporting.
 
-By combining statistical, deep-learning, and Hidden Markov Model-based approaches, integrated application of these tools significantly improves precision and accuracy in peak calling.
-
+By combining statistical, deep-learning, and Hidden Markov Model-based approaches, the integrated application of these tools significantly improves precision and accuracy in peak calling.
 
 [![Nextflow](https://img.shields.io/badge/Nextflow-DSL2-brightgreen)](https://www.nextflow.io/)
 [![Docker](https://img.shields.io/badge/Container-Docker-blue)](https://www.docker.com/)
 
 ---
 
-## Overview
+## Overview & Peak Calling Methodologies
 
-CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiments.
-The pipeline automatically:
+CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiments. To guarantee the highest sensitivity and specificity, the pipeline employs three distinct peak-calling algorithms:
 
-Detects **Single-End** and **Paired-End** libraries
-Identifies control samples for ChIP-seq analyses
-Supports custom reference genomes
-Generates browser-ready signal tracks
-Executes multiple peak-calling strategies
-Produces publication-ready quality-control reports
+1. **MACS3 (Statistical Modeling):** The gold standard for ChIP-seq. 
+   * *Single Mode:* Calls peaks for each individual replicate.
+   * *Grouped Mode:* Pools replicates belonging to the same biological group to build a highly robust "master" consensus peakset.
+2. **LanceOtron (Deep Learning):** Uses neural networks to evaluate peak shapes, drastically reducing false positives typical of noisy datasets.
+3. **OmniPeak (Hidden Markov Models):** A powerful peak caller designed to identify signals independently of their shape (broad or narrow), making it excellent for complex chromatin patterns.
 
 ---
+
 ## Features
-ChIP-seq and ATAC-seq support
-Automatic Single-End / Paired-End detection
-Automatic control sample identification
-Quality control with FastQC
-Adapter trimming with Trim Galore
-Alignment using Bowtie2
-BAM processing with SAMtools
-Duplicate removal with Picard
-Blacklist filtering
-BigWig signal track generation
-Multi-strategy peak calling:
-MACS3 (statistical modeling)
-Lanceotron (deep learning)
-OmniPeak (Hidden Markov Models)
-FRiP score calculation
-Peak annotation with HOMER
-Differential binding analysis with DiffBind
-Signal profiling with Profileplyr
-MultiQC reporting
-Docker support
-AWS/S3 compatibility through nf-amazon
+
+* ChIP-seq and ATAC-seq support
+* Automatic Single-End / Paired-End detection
+* Automatic control sample identification
+* Quality control with FastQC
+* Adapter trimming with Trim Galore
+* Alignment using Bowtie2
+* BAM processing with SAMtools
+* Duplicate removal with Picard
+* Blacklist filtering
+* BigWig signal track generation
+* **Multi-strategy peak calling** (MACS3 Single/Grouped, LanceOtron, OmniPeak)
+* FRiP score calculation
+* Peak annotation with HOMER
+* Differential binding analysis with DiffBind
+* Signal profiling with Profileplyr
+* Comprehensive MultiQC reporting
+* Docker and AWS/S3 compatibility through `nf-amazon`
 
 ---
 
 ## Workflow
 
-```text
-FASTQ
- ↓
-FastQC
- ↓
-Trim Galore
- ↓
-Bowtie2 Alignment
- ↓
-SAMtools Processing
- ↓
-Picard MarkDuplicates
- ↓
-Blacklist Filtering
- ↓
-deepTools QC + BigWig Generation
- ↓
- ├── MACS3 Peak Calling
- └── Lanceotron Peak Calling
- ↓
- FRiP Score
- ↓
- HOMER Annotation
- ↓
-DiffBind
- ↓
-Profileplyr
- ↓
- MultiQC
-```
+<p align="center">
+  <img src="workflow.png" alt="CATP3ak Workflow Metro Map" width="900">
+</p>
 
 ---
 
@@ -97,7 +63,6 @@ Profileplyr
 
 * Nextflow ≥ 25.x
 * Docker
-* Linux environment
 
 Verify installation:
 
@@ -119,6 +84,7 @@ nextflow run apgrimaldi/CATP3ak \
     --input samplesheet.csv \
     --protocol chip \
     --genome GRCh38 \
+    --chrom_sizes path/to/hg38.chrom.sizes \
     --outdir results
 ```
 
@@ -163,8 +129,9 @@ nextflow run apgrimaldi/CATP3ak \
     -profile docker \
     --protocol chip \
     --input samplesheet.csv \
-    --fasta_file reference.fasta \
+    --reference_file reference.fasta \
     --gtf_file annotation.gtf \
+    --chrom_sizes hg38.chrom.sizes \
     --macs_gsize 2.7e9 \
     --blacklist blacklist.bed \
     --outdir results \
@@ -260,19 +227,19 @@ results/
 
 ## Generated Outputs
 
-CATP3ak produces:
+CATP3ak produces a comprehensive set of results designed for both immediate biological interpretation and further computational analysis:
 
-* Quality-control reports
-* Filtered BAM files
-* BigWig tracks for genome browsers
-* MACS3 peaks (narrow and broad)
-* Lanceotron peaks (raw and filtered)
-* FRiP statistics
-* HOMER annotations
-* DiffBind differential binding results
-* Profileplyr signal profiling reports
-* MultiQC summary report
-
+* **Quality-control reports:** FastQC and Trim Galore metrics evaluating raw read quality, adapter trimming efficiency, and sequence duplication levels.
+* **Filtered BAM files:** Sorted and indexed alignment files processed to remove PCR duplicates (Picard) and artifact-prone blacklisted regions, ready for downstream analysis.
+* **BigWig tracks for genome browsers:** Normalized, continuous coverage files (`.bw` generated by deepTools) optimized for visual inspection on IGV or UCSC Genome Browser.
+* **MACS3 peaks (narrow and broad):** High-confidence binding sites identified statistically, outputting both single-replicate peaks and highly robust *Grouped* consensus peaks in standard BED/narrowPeak formats.
+* **LanceOtron peaks (raw and filtered):** Deep learning-evaluated peaks containing neural network confidence scores, accompanied by a filtered dataset based on the user-defined threshold.
+* **OmniPeak results:** Hidden Markov Model-derived peaks, highly effective at capturing both sharp transcription factor binding and broad histone mark profiles.
+* **FRiP statistics:** "Fraction of Reads in Peaks" calculations providing a crucial metric to assess the overall signal-to-noise ratio and success of the immunoprecipitation.
+* **HOMER annotations:** Detailed genomic feature mapping that associates each identified peak with its nearest gene, promoter, intron, or exon.
+* **DiffBind differential binding results:** Quantitative output (CSV format) identifying genomic regions with statistically significant changes in binding intensity between experimental conditions.
+* **Profileplyr signal profiling reports:** Heatmaps and read density profiles plotted around peak centers, offering a clear visual comparison of binding dynamics.
+* **MultiQC summary report:** An interactive, all-in-one HTML dashboard aggregating logs and metrics from every step of the pipeline for rapid experiment evaluation. 
 ---
 
 ## Reproducibility
