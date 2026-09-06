@@ -19,13 +19,16 @@ By combining statistical, deep-learning, and Hidden Markov Model-based approache
 
 ## Overview & Peak Calling Methodologies
 
-CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiments. To guarantee the highest sensitivity and specificity, the pipeline employs three distinct peak-calling algorithms:
+Analysis of ATAC- and ChIP-Seq data is often complex due to the large number of candidate peaks assessed during peak calling, where noise, inter-sample biological variation, and overlapping signals can reduce accuracy.
+CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiments to overcome these issues by integrating three complementary peak-calling algorithms:
 
 1. **MACS3 (Statistical Modeling):** The gold standard for ChIP-seq. 
    * *Single Mode:* Calls peaks for each individual replicate.
-   * *Grouped Mode:* Pools replicates belonging to the same biological group to build a highly robust "master" consensus peakset.
-2. **LanceOtron (Deep Learning):** Uses neural networks to evaluate peak shapes, drastically reducing false positives typical of noisy datasets.
-3. **OmniPeak (Hidden Markov Models):** A powerful peak caller designed to identify signals independently of their shape (broad or narrow), making it excellent for complex chromatin patterns.
+   * *Grouped Mode:* Automatically handles control sample pairing and pools replicates belonging to the same biological group to build a robust consensus peakset.
+2. **LanceOtron (Deep Learning):** Utilizes neural networks to recognize and extract peak shapes, drastically reducing false positives and identifying low-intensity peaks frequently missed by standard filtering methods.
+3. **OmniPeak (Hidden Markov Models):** A powerful peak caller based on Hidden Markov Models (HMM) designed to identify signals independently of their shape, helping to capture low-intensity peaks.
+
+By combining statistical modeling, neural networks, and HMM-based approaches, the integrated application of these tools significantly improves precision, accuracy, reproducibility, and overall confidence in peak calling while reducing background noise and false positives.
 
 ---
 
