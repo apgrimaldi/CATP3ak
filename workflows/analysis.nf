@@ -341,16 +341,16 @@ workflow CATP3ak {
         ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
     }
    // --- SEQCODE GENOME DISTRIBUTION ---
-    if (!params.skip_seqcode && gtf_file) {
+    if (!params.skip_seqcode && gtf_file && params.chrom_sizes) {
         
-        // Filtra i picchi per assicurarsi che non siano vuoti
         ch_seqcode_input = ch_narrow_peaks.filter { meta, peak -> 
             peak != null && peak.exists() && peak.size() > 0 
         }
         
         SEQCODE_GENOMEDISTRIBUTION ( 
             ch_seqcode_input, 
-            file(gtf_file) 
+            file(gtf_file),
+            file(params.chrom_sizes)
         )
     }
     // --- MULTIQC ---
