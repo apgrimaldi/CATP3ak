@@ -302,19 +302,28 @@ workflow CATP3ak {
     }
 
     // --- SEQCODE GENOME DISTRIBUTION ---
+    println "--- DEBUG SEQCODE ---"
+    println "1. skip_seqcode è: ${params.skip_seqcode}"
+    println "2. gtf_file è: ${gtf_file}"
+    println "3. chrom_sizes_file è: ${chrom_sizes_file}"
+
     if (!params.skip_seqcode && gtf_file && chrom_sizes_file) {
         
         ch_seqcode_input = ch_narrow_peaks.filter { meta, peak -> 
             peak != null && peak.exists() && peak.size() > 0 
         }
         
+        // Questo stamperà a schermo se ci sono effettivamente picchi da analizzare
+        ch_seqcode_input.view { "--> SeqCode sta per analizzare il campione: ${it[0].id}" }
+        
         SEQCODE_GENOMEDISTRIBUTION ( 
             ch_seqcode_input, 
             file(gtf_file),
             file(chrom_sizes_file)
         )
+    } else {
+        println "--> L'IF HA BLOCCATO SEQCODE!"
     }
-
     // --- MULTIQC ---
     if (!params.skip_multiqc) {
         ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
