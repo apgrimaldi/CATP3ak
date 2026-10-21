@@ -12,18 +12,20 @@ process SEQCODE_GENOMEDISTRIBUTION {
 
     output:
     tuple val(meta), path("*_distribution*"), emit: results
-    path "versions.yml"                     , emit: versions
 
     script:
     def args = task.ext.args ?: ''
     
     """
-    # Esegue genomeDistribution in modalità dettagliata (-d)
-    genomeDistribution -d -i ${peaks} -g ${gtf} -o ${meta.id}_distribution ${args}
+    # 1. Cerca il percorso esatto dell'eseguibile dentro il container
+    CMD_PATH=\$(find / -name "genomeDistribution" -type f -executable 2>/dev/null | grep "bin" | head -n 1)
+    
+    # Fallback se find non dovesse trovarlo (percorso tipico di installazione)
+    if [ -z "\$CMD_PATH" ]; then
+        CMD_PATH="/seqcode/bin/genomeDistribution"
+    fi
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        seqcode: \$(echo "base")
-    END_VERSIONS
+    # 2. Esegue il tool usando il percorso assoluto e i parametri
+    \$CMD_PATH -d -i ${peaks} -g ${gtf} -o ${meta.id}_distribution ${args}
     """
 }
