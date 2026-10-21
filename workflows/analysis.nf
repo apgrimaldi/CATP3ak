@@ -28,9 +28,6 @@ include { HOMER_ANNOTATEPEAKS as HOMER_OMNI } from '../modules/local/homer_annot
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_LANCE } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_OMNI } from '../modules/local/diffbind.nf'
-include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
 include { SEQCODE_GENOMEDISTRIBUTION } from '../modules/local/seqcode_genomedistribution.nf'
 
 workflow CATP3ak {
@@ -312,34 +309,6 @@ workflow CATP3ak {
             ch_versions = ch_versions.mix(DIFFBIND_OMNI.out.versions)
         }
     }
-
-    // --- PROFILEPLYR ---
-    ch_profileplyr_mqc = Channel.empty()
-    if (!params.skip_profileplyr) {
-        
-        if (!params.skip_lanceotron) {
-            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "lanceotron" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_LANCE.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions)
-        }
-
-        if (!params.skip_macs3) {
-            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "macs3" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_MACS.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_MACS.out.versions)
-        }
-
-        if (!params.skip_omnipeak) {
-            ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
-                return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
-            }.collect()
-            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "omnipeak" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_OMNI.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_OMNI.out.versions)
-        }
-
-        ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
-    }
    // --- SEQCODE GENOME DISTRIBUTION ---
     if (!params.skip_seqcode && gtf_file && params.chrom_sizes) {
         
@@ -376,7 +345,6 @@ workflow CATP3ak {
             ch_frip_mqc.map(getFile).collect().ifEmpty([]),
             ch_all_homer_mqc.flatten().collect().ifEmpty([]),
             ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
-            ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
             ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
             ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
             ch_versions_mqc
