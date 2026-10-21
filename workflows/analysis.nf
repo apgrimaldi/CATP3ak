@@ -28,9 +28,6 @@ include { HOMER_ANNOTATEPEAKS as HOMER_OMNI } from '../modules/local/homer_annot
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_LANCE } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_OMNI } from '../modules/local/diffbind.nf'
-include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
 include { SEQCODE_GENOMEDISTRIBUTION } from '../modules/local/seqcode_genomedistribution.nf'
 
 workflow CATP3ak {
@@ -168,7 +165,6 @@ workflow CATP3ak {
            // ESECUZIONE 2: ChIP Grouped
             ch_ip_group = ch_bams_branched.ip
                 .map { meta, bam, bai -> 
-                    // Se antibody o condition mancano, usa group o id
                     def anti = meta.antibody ?: "IP"
                     def cond = meta.condition ?: "cond"
                     def group_id = meta.group ?: "${anti}_${cond}"
@@ -178,7 +174,7 @@ workflow CATP3ak {
                 
             ch_ct_group = ch_bams_branched.control
                 .map { meta, bam, bai -> 
-                    def anti = meta.antibody ?: "IP" // Se non l'hai messo nei controlli, spero ci sia il 'group'
+                    def anti = meta.antibody ?: "IP" 
                     def cond = meta.condition ?: "cond"
                     def group_id = meta.group ?: "${anti}_${cond}"
                     [ group_id, bam ] 
@@ -193,7 +189,6 @@ workflow CATP3ak {
                 }
 
           MACS3_GROUP ( ch_macs_group_input, m_genome )
-            
             
             ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
@@ -279,10 +274,6 @@ workflow CATP3ak {
     ch_diffbind_macs_mqc  = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
     ch_diffbind_omni_mqc  = Channel.empty()
-    
-    ch_diffbind_macs_sig  = Channel.empty()
-    ch_diffbind_lance_sig = Channel.empty()
-    ch_diffbind_omni_sig  = Channel.empty()
 
     if (!params.skip_diffbind) {
         if (!params.skip_macs3) {
@@ -290,7 +281,6 @@ workflow CATP3ak {
             ch_db_macs_samplesheet = ch_diffbind_macs_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},narrow" }.collectFile(name: 'samplesheet_diffbind_macs.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
             DIFFBIND_MACS ( "macs3", ch_db_macs_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_narrow_peaks.map{ it[1] }.collect() )
             ch_diffbind_macs_mqc = DIFFBIND_MACS.out.mqc_html.mix(DIFFBIND_MACS.out.mqc_txt).collect().ifEmpty([])
-            ch_diffbind_macs_sig = DIFFBIND_MACS.out.sig_bed
             ch_versions = ch_versions.mix(DIFFBIND_MACS.out.versions)
         }
 
@@ -299,7 +289,6 @@ workflow CATP3ak {
             ch_db_lance_samplesheet = ch_diffbind_lance_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},lanceotron" }.collectFile(name: 'samplesheet_diffbind_lanceotron.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
             DIFFBIND_LANCE ( "lanceotron", ch_db_lance_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect() )
             ch_diffbind_lance_mqc = DIFFBIND_LANCE.out.mqc_html.mix(DIFFBIND_LANCE.out.mqc_txt).collect().ifEmpty([])
-            ch_diffbind_lance_sig = DIFFBIND_LANCE.out.sig_bed
             ch_versions = ch_versions.mix(DIFFBIND_LANCE.out.versions)
         }
 
@@ -308,40 +297,12 @@ workflow CATP3ak {
             ch_db_omni_samplesheet = ch_diffbind_omni_prep.map { meta, bam, bai, peak -> "${meta.id},${meta.condition ?: meta.antibody},${meta.replicate ?: "1"},${bam.name},${peak.name},bed" }.collectFile(name: 'samplesheet_diffbind_omnipeak.csv', newLine: true, seed: 'SampleID,Condition,Replicate,bamReads,Peaks,PeakCaller')
             DIFFBIND_OMNI ( "omnipeak", ch_db_omni_samplesheet, ch_final_bams.map{ it[1] }.collect(), ch_final_bams.map{ it[2] }.collect(), ch_omni_peaks.map{ it[1] }.collect() )
             ch_diffbind_omni_mqc = DIFFBIND_OMNI.out.mqc_html.mix(DIFFBIND_OMNI.out.mqc_txt).collect().ifEmpty([])
-            ch_diffbind_omni_sig = DIFFBIND_OMNI.out.sig_bed
             ch_versions = ch_versions.mix(DIFFBIND_OMNI.out.versions)
         }
     }
 
-    // --- PROFILEPLYR ---
-    ch_profileplyr_mqc = Channel.empty()
-    if (!params.skip_profileplyr) {
-        
-        if (!params.skip_lanceotron) {
-            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "lanceotron" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_LANCE.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions)
-        }
-
-        if (!params.skip_macs3) {
-            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "macs3" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_MACS.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_MACS.out.versions)
-        }
-
-        if (!params.skip_omnipeak) {
-            ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
-                return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
-            }.collect()
-            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "omnipeak" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_OMNI.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_OMNI.out.versions)
-        }
-
-        ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
-    }
-   // --- SEQCODE GENOME DISTRIBUTION ---
-    if (!params.skip_seqcode && gtf_file && params.chrom_sizes) {
+    // --- SEQCODE GENOME DISTRIBUTION ---
+    if (!params.skip_seqcode && gtf_file && chrom_sizes_file) {
         
         ch_seqcode_input = ch_narrow_peaks.filter { meta, peak -> 
             peak != null && peak.exists() && peak.size() > 0 
@@ -350,15 +311,19 @@ workflow CATP3ak {
         SEQCODE_GENOMEDISTRIBUTION ( 
             ch_seqcode_input, 
             file(gtf_file),
-            file(params.chrom_sizes)
+            file(chrom_sizes_file)
         )
     }
+
     // --- MULTIQC ---
     if (!params.skip_multiqc) {
         ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
         ch_all_diffbind_mqc = ch_diffbind_macs_mqc.mix(ch_diffbind_lance_mqc, ch_diffbind_omni_mqc).collect().ifEmpty([])
         ch_summary_mqc = Channel.of("Protocol: ${params.protocol}\nGenome: ${params.genome}").collectFile(name: 'summary.txt').collect()
         ch_versions_mqc = ch_versions.unique().collectFile(name: 'collated_versions.yml').collect().ifEmpty([])
+
+        // Canale fittizio vuoto per rimpiazzare ProfilePlyr senza rompere i parametri di ingresso di MultiQC
+        ch_profileplyr_mqc = Channel.empty().collect().ifEmpty([])
 
         def getFile = { it instanceof List ? it[1] : it }
 
@@ -376,7 +341,7 @@ workflow CATP3ak {
             ch_frip_mqc.map(getFile).collect().ifEmpty([]),
             ch_all_homer_mqc.flatten().collect().ifEmpty([]),
             ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
-            ch_profileplyr_mqc.flatten().collect().ifEmpty([]),
+            ch_profileplyr_mqc,
             ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
             ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
             ch_versions_mqc
