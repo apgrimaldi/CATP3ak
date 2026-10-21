@@ -9,7 +9,7 @@ process PROFILEPLYR {
     path(diff_peaks, stageAs: 'diff_peaks/*')
     path(raw_peaks,  stageAs: 'raw_peaks/*')
     path(bigwigs,    stageAs: 'bigwigs/*')
-    path(gtf)  // <-- NUOVO INPUT: il file di annotazione per i TSS
+    path(gtf)
     val label
 
     output:
@@ -49,23 +49,30 @@ process PROFILEPLYR {
         file.create("${label}_profile_heatmap.pdf")
     } else {
         
-        # Filtra i trascritti e ottieni il TSS esatto (start per il filamento +, end per il -)
+        # Filtra i trascritti e ottieni il TSS esatto
         transcripts <- gtf_data[gtf_data\$type == "transcript" | gtf_data\$type == "mRNA"]
         if (length(transcripts) == 0) {
             transcripts <- gtf_data[gtf_data\$type == "gene"]
         }
         
         tss_gr <- resize(transcripts, width = 1, fix = "start")
-        tss_gr <- unique(tss_gr) # Rimuovi TSS duplicati
+        
+        # --- LA FIX È QUI ---
+        # Puliamo i metadati del GTF che causano il crash del DataFrame
+        mcols(tss_gr) <- NULL 
+        tss_gr\$name <- paste0("TSS_", seq_along(tss_gr))
+        # --------------------
+        
+        tss_gr <- unique(tss_gr)
 
-        # Limita ai 15.000 TSS casuali per evitare crash di memoria se il genoma è enorme
+        # Limita ai 15.000 TSS casuali per evitare crash di memoria
         if (length(tss_gr) > 15000) {
             tss_gr <- tss_gr[sample(seq_along(tss_gr), 15000)]
         }
 
         export(tss_gr, "tss_ranges.bed")
 
-        # 2. Genera il profilo usando i TSS
+        # 2. Genera il profilo usando i TSS puliti
         tryCatch({
             pro_chip <- BamBigwig_to_chipProfile(
                 signalFiles = bw_files,
