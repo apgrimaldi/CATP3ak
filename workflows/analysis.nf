@@ -317,13 +317,13 @@ workflow CATP3ak {
     if (!params.skip_profileplyr) {
         
         if (!params.skip_lanceotron) {
-            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "lanceotron" )
+            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "lanceotron" )
             ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_LANCE.out.mqc_html)
             ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions)
         }
 
         if (!params.skip_macs3) {
-            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "macs3" )
+            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "macs3" )
             ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_MACS.out.mqc_html)
             ch_versions = ch_versions.mix(PROFILEPLYR_MACS.out.versions)
         }
@@ -332,7 +332,7 @@ workflow CATP3ak {
             ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
                 return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
             }.collect()
-            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(), "omnipeak" )
+            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "omnipeak" )
             ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_OMNI.out.mqc_html)
             ch_versions = ch_versions.mix(PROFILEPLYR_OMNI.out.versions)
         }
