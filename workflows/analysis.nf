@@ -31,6 +31,7 @@ include { DIFFBIND as DIFFBIND_OMNI } from '../modules/local/diffbind.nf'
 include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
 include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
 include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
+include { SEQCODE_GENOMEDISTRIBUTION } from '../modules/local/seqcode_genomedistribution.nf'
 
 workflow CATP3ak {
     take:
@@ -339,7 +340,19 @@ workflow CATP3ak {
 
         ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
     }
-
+   // --- SEQCODE GENOME DISTRIBUTION ---
+    if (!params.skip_seqcode && gtf_file) {
+        
+        // Filtra i picchi per assicurarsi che non siano vuoti
+        ch_seqcode_input = ch_narrow_peaks.filter { meta, peak -> 
+            peak != null && peak.exists() && peak.size() > 0 
+        }
+        
+        SEQCODE_GENOMEDISTRIBUTION ( 
+            ch_seqcode_input, 
+            file(gtf_file) 
+        )
+    }
     // --- MULTIQC ---
     if (!params.skip_multiqc) {
         ch_all_homer_mqc = ch_homer_macs_mqc.mix(ch_homer_lance_mqc, ch_homer_omni_mqc).collect().ifEmpty([])
