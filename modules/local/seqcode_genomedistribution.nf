@@ -2,7 +2,7 @@ process SEQCODE_GENOMEDISTRIBUTION {
     tag "$meta.id"
     label 'process_medium'
 
-    container 'quay.io/biocontainers/seqcode:...' // (mantieni il container che già usi)
+   container 'eblancocrg/seqcode:base'
 
     input:
     tuple val(meta), path(peak)
