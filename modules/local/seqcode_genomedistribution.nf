@@ -10,8 +10,8 @@ process SEQCODE_GENOMEDISTRIBUTION {
     path chrom_sizes
 
     output:
-    tuple val(meta), path("*.{txt,pdf,png}"), emit: results
-    path "versions.yml"                   , emit: versions
+    tuple val(meta), path("${meta.id}_seqcode*"), emit: results
+    path "versions.yml"                         , emit: versions
 
     script:
     def args = task.ext.args ?: ''
