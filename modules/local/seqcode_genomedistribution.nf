@@ -4,7 +4,6 @@ process SEQCODE_GENOMEDISTRIBUTION {
     
     container 'eblancocrg/seqcode:base'
 
-    publishDir "${params.outdir}/14_seqcode_distribution", mode: params.publish_dir_mode
 
     input:
     tuple val(meta), path(peaks)
