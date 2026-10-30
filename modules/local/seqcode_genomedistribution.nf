@@ -16,13 +16,13 @@ process SEQCODE_GENOMEDISTRIBUTION {
     script:
     def args = task.ext.args ?: ''
     """
-    # 1. Trova l'eseguibile all'interno del container di SeqCode
+    
     CMD_PATH=\$(find / -name "genomeDistribution" -type f -executable 2>/dev/null | grep "bin" | head -n 1)
     if [ -z "\$CMD_PATH" ]; then
         CMD_PATH="/seqcode/bin/genomeDistribution"
     fi
 
-    # 2. Scompatta il file refgene se è in formato .gz
+    
     REFGENE_UNCOMPRESSED="refGene.txt"
     if [[ "${refgene}" == *.gz ]]; then
         gunzip -c "${refgene}" > \$REFGENE_UNCOMPRESSED
@@ -30,17 +30,17 @@ process SEQCODE_GENOMEDISTRIBUTION {
         cp "${refgene}" \$REFGENE_UNCOMPRESSED
     fi
 
-    # 3. Esegue il comando usando il percorso trovato
+    
+    # <chrom_info> <refGene.txt> <peaks.bed> <name>
     \$CMD_PATH \\
         $args \\
-        --peaks ${peak} \\
-        --refgene \$REFGENE_UNCOMPRESSED \\
-        --chrom_sizes ${chrom_sizes} \\
-        --output ${meta.id}_seqcode
+        ${chrom_sizes} \\
+        \$REFGENE_UNCOMPRESSED \\
+        ${peak} \\
+        ${meta.id}_seqcode
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         seqcode: "1.0"
     END_VERSIONS
     """
-}
