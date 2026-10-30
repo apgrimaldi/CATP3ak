@@ -347,7 +347,7 @@ workflow CATP3ak {
         
         SEQCODE_GENOMEDISTRIBUTION ( 
             ch_seqcode_input, 
-            file(refgene_file), // <-- Corretto!
+            file(refgene_file), 
             file(chrom_sizes_file)
         )
     }
