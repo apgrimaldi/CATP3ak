@@ -10,7 +10,7 @@ process SEQCODE_GENOMEDISTRIBUTION {
     path chrom_sizes
 
     output:
-    tuple val(meta), path("${meta.id}_seqcode*"), emit: results
+    tuple val(meta), path("${meta.id}*"), emit: results
     path "versions.yml"                         , emit: versions
 
     script:
