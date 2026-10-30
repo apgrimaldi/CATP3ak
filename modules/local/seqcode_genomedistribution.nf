@@ -44,3 +44,4 @@ process SEQCODE_GENOMEDISTRIBUTION {
         seqcode: "1.0"
     END_VERSIONS
     """
+}
