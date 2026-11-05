@@ -30,6 +30,8 @@ CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiment
 
 By combining statistical modeling, neural networks, and HMM-based approaches, the integrated application of these tools significantly improves precision, accuracy, reproducibility, and overall confidence in peak calling while reducing background noise and false positives.
 
+> 🚧 **Note on Pipeline Updates:** As we continuously evaluate and test new tools for this workflow, you might experience occasional changes in the output directory structure, the order of generated results, and temporary execution errors that will be promptly fixed. Additionally, several new parameters are still in the beta testing phase and are subject to change.
+
 ---
 
 ## Features
@@ -108,7 +110,8 @@ nextflow run apgrimaldi/CATP3ak \
 | `--skip_diffbind`        | Skip DiffBind analysis                            |
 | `--skip_profileplyr`     | Skip Profileplyr analysis                         |
 | `--skip_omnipeak`        | Skip Omnipeak analysis                            |
-
+| `--skip_seqcode`         | Skip SeqCode analysis                             |
+   
 
 > ⚠️ **Important Note regarding Profileplyr:** At the moment, the `profileplyr` tool is unstable and may not work correctly with certain datasets. It is highly recommended to run the pipeline with the `--skip_profileplyr` parameter to skip this step. We are currently working on replacing it with alternative tools in future releases.
 ---
