@@ -2,7 +2,7 @@ process DEEPTOOLS_COMPUTEMATRIX {
     tag "$meta.id"
     label 'process_high'
 
-    // Usiamo solo Docker come richiesto
+    
     container 'biocontainers/deeptools:3.5.5--pyhdfd78af_0'
 
     input:
