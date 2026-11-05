@@ -113,7 +113,7 @@ nextflow run apgrimaldi/CATP3ak \
 | `--skip_seqcode`         | Skip SeqCode analysis                             |
    
 
-> ⚠️ **Important Note regarding Profileplyr:** At the moment, the `profileplyr` tool is unstable and may not work correctly with certain datasets. It is highly recommended to run the pipeline with the `--skip_profileplyr` parameter to skip this step. We are currently working on replacing it with alternative tools in future releases.
+> ⚠️ **Important Note on Profileplyr:** At the moment, the `profileplyr` tool is unstable and may not work correctly with certain datasets. It is highly recommended to run the pipeline with the `--skip_profileplyr` parameter to skip this step. We are currently working on replacing it with alternative tools in future releases.
 ---
 
 ## Custom Genome Support
