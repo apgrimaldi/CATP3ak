@@ -2,7 +2,7 @@ process DEEPTOOLS_PLOTHEATMAP {
     tag "$meta.id"
     label 'process_medium'
 
-    container 'biocontainers/deeptools:3.5.5--pyhdfd78af_0'
+    container 'quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0'
 
     input:
     tuple val(meta), path(matrix)
