@@ -313,7 +313,6 @@ workflow CATP3ak {
     }
 
     // --- SEQCODE GENOME DISTRIBUTION ---
-    ch_seqcode_mqc = Channel.empty()
     if (!params.skip_seqcode && refgene_file && chrom_sizes_file) {
 
         ch_seqcode_input = ch_narrow_peaks.filter { meta, peak ->
@@ -325,12 +324,6 @@ workflow CATP3ak {
             file(refgene_file),
             file(chrom_sizes_file)
         )
-
-        ch_seqcode_mqc = SEQCODE_GENOMEDISTRIBUTION.out.results
-            .map { meta, files -> files }
-            .flatten()
-            .collect()
-            .ifEmpty([])
 
         ch_versions = ch_versions.mix(SEQCODE_GENOMEDISTRIBUTION.out.versions)
     }
@@ -377,7 +370,6 @@ workflow CATP3ak {
             ch_frip_mqc.map(getFile).collect().ifEmpty([]),
             ch_all_homer_mqc.flatten().collect().ifEmpty([]),
             ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
-            ch_seqcode_mqc,
             ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]),
             ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]),
             ch_versions_mqc
