@@ -105,13 +105,6 @@ custom_data:
   homer_annotations_omnipeak:
     section_name: "Annotation: Genomic Distribution (Omnipeak)"
     plot_type: "bargraph"
-  seqcode_genome_distribution:
-    section_name: "SeqCode: Genome Distribution"
-    description: "Distribuzione genomica dei picchi calcolata con SeqCode genomeDistribution."
-    plot_type: "bargraph"
-    pconfig:
-      id: "seqcode_genome_dist_plot"
-      title: "SeqCode: Genome Distribution"
 
 sp:
   software_versions: {fn: "collated_versions.yml"}
@@ -126,7 +119,6 @@ sp:
   homer_annotations_broad: {fn: "*.broad.homer_stats_mqc.txt"}
   homer_annotations_lanceotron: {fn: "*.lanceotron.homer_stats_mqc.txt"}
   homer_annotations_omnipeak: {fn: "*.omnipeak.homer_stats_mqc.txt"}
-  seqcode_genome_distribution: {fn: "*_seqcode*"}
 
 extra_fn_clean_exts:
 - ".plotFingerprint.qcmetrics"
