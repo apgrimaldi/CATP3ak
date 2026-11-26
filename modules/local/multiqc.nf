@@ -4,7 +4,7 @@ process MULTIQC {
 
     input:
     path multiqc_config
-    path workflow_summary    
+    path workflow_summary
     path fastqc
     path trimgalore
     path alignment
@@ -12,13 +12,13 @@ process MULTIQC {
     path samtools
     path deeptools
     path macs3
-    path counts        
+    path counts
     path frip
     path homer
-    path diffbind      
-    path profileplyr    
-    path lanceotron 
-    path omnipeak    
+    path diffbind
+    path seqcode
+    path lanceotron
+    path omnipeak
     path versions
 
     output:
