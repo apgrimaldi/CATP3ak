@@ -14,15 +14,14 @@ process SEQCODE_GENOMEDISTRIBUTION {
     path "versions.yml"                         , emit: versions
 
     script:
-    def args = task.ext.args ?: ''
+    def args = task.ext.args ?: '-d'
     """
-    
+
     CMD_PATH=\$(find / -name "genomeDistribution" -type f -executable 2>/dev/null | grep "bin" | head -n 1)
     if [ -z "\$CMD_PATH" ]; then
         CMD_PATH="/seqcode/bin/genomeDistribution"
     fi
 
-    
     REFGENE_UNCOMPRESSED="refGene.txt"
     if [[ "${refgene}" == *.gz ]]; then
         gunzip -c "${refgene}" > \$REFGENE_UNCOMPRESSED
@@ -30,7 +29,6 @@ process SEQCODE_GENOMEDISTRIBUTION {
         cp "${refgene}" \$REFGENE_UNCOMPRESSED
     fi
 
-    
     # <chrom_info> <refGene.txt> <peaks.bed> <name>
     \$CMD_PATH \\
         $args \\
