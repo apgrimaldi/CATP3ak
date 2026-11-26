@@ -47,7 +47,7 @@ workflow CATP3ak {
     def bowtie2_index    = null
     def blacklist_path   = null
     def chrom_sizes_file = null
-    def refgene_file     = null // <-- Variabile aggiunta per SeqCode
+    def refgene_file     = null 
     def m_genome         = params.macs_gsize 
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
