@@ -30,29 +30,29 @@ CATP3ak is a modular workflow designed for both ChIP-seq and ATAC-seq experiment
 
 By combining statistical modeling, neural networks, and HMM-based approaches, the integrated application of these tools significantly improves precision, accuracy, reproducibility, and overall confidence in peak calling while reducing background noise and false positives.
 
-> 🚧 **Note on Pipeline Updates:** As we continuously evaluate and test new tools for this workflow, you might experience occasional changes in the output directory structure, the order of generated results, and temporary execution errors that will be promptly fixed. Additionally, several new parameters are still in the beta testing phase and are subject to change.
 
 ---
 
 ## Features
 
-* ChIP-seq and ATAC-seq support
-* Automatic Single-End / Paired-End detection
-* Automatic control sample identification
-* Quality control with FastQC
-* Adapter trimming with Trim Galore
-* Alignment using Bowtie2
-* BAM processing with SAMtools
-* Duplicate removal with Picard
-* Blacklist filtering
-* BigWig signal track generation
-* **Multi-strategy peak calling** (MACS3 Single/Grouped, LanceOtron, OmniPeak)
-* FRiP score calculation
-* Peak annotation with HOMER
-* Differential binding analysis with DiffBind
-* Signal profiling with Profileplyr
-* Comprehensive MultiQC reporting
-* Docker and AWS/S3 compatibility through `nf-amazon`
+- ChIP-seq and ATAC-seq support
+- Automatic Single-End / Paired-End detection
+- Automatic control sample identification
+- Quality control with FastQC
+- Adapter trimming with Trim Galore
+- Alignment using Bowtie2
+- BAM processing with SAMtools
+- Duplicate removal with Picard
+- Blacklist filtering
+- BigWig signal track generation
+- **Multi-strategy peak calling** (MACS3 Single/Grouped, LanceOtron, OmniPeak)
+- FRiP score calculation
+- Peak annotation with HOMER
+- Differential binding analysis with DiffBind
+- Genome distribution analysis with SeqCode (`genomeDistribution`)
+- TSS signal matrix and heatmap generation with deepTools (`computeMatrix`, `plotHeatmap`)
+- Comprehensive MultiQC reporting (including embedded deepTools TSS heatmaps and SeqCode results)
+- Docker and AWS/S3 compatibility through `nf-amazon`
 
 ---
 
@@ -97,23 +97,22 @@ nextflow run apgrimaldi/CATP3ak \
 
 ## Main Parameters
 
-| Parameter                | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `--input`                | Input samplesheet                                 |
-| `--protocol`             | Analysis type (`chip` or `atac`)                  |
-| `--genome`               | Genome identifier                                 |
-| `--outdir`               | Output directory                                  |
-| `--fragment_size`        | Fragment size used for single-end analyses        |
-| `--single_end`           | Force single-end processing                       |
-| `--lanceotron_threshold` | Minimum Lanceotron score retained after filtering |
-| `--skip_homer`           | Skip HOMER annotation                             |
-| `--skip_diffbind`        | Skip DiffBind analysis                            |
-| `--skip_profileplyr`     | Skip Profileplyr analysis                         |
-| `--skip_omnipeak`        | Skip Omnipeak analysis                            |
-| `--skip_seqcode`         | Skip SeqCode analysis                             |
-   
+| Parameter                  | Description                                                             |
+| ------------------------   | ---------------------------------------------------------------         |
+| `--input`                  | Input samplesheet                                                       |
+| `--protocol`               | Analysis type (`chip` or `atac`)                                        |
+| `--genome`                 | Genome identifier                                                       |
+| `--bed12`                  | Reference BED12 annotation file for TSS matrix/heatmap                  |
+| `--outdir`                 | Output directory                                                        |
+| `--fragment_size`          | Fragment size used for single-end analyses                              |
+| `--single_end`             | Force single-end processing                                             |
+| `--lanceotron_threshold`   | Minimum Lanceotron score retained after filtering                       |
+| `--skip_homer`             | Skip HOMER annotation                                                   |
+| `--skip_diffbind`          | Skip DiffBind analysis                                                  |
+| `--skip_omnipeak`          | Skip Omnipeak analysis                                                  |
+| `--skip_seqcode`           | Skip SeqCode analysis                                                   |
+| `--skip_deeptools_heatmap` | Skip deepTools TSS matrix (`computeMatrix`) and heatmap (`plotHeatmap`) |
 
-> ⚠️ **Important Note on Profileplyr:** At the moment, the `profileplyr` tool is unstable and may not work correctly with certain datasets. It is highly recommended to run the pipeline with the `--skip_profileplyr` parameter to skip this step. We are currently working on replacing it with alternative tools in future releases.
 ---
 
 ## Custom Genome Support
