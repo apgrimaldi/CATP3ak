@@ -10,19 +10,17 @@ process DEEPTOOLS_PLOTHEATMAP {
     output:
     tuple val(meta), path("*.png"), emit: png
     tuple val(meta), path("*.pdf"), emit: pdf
-    path "versions.yml"           , emit: versions
+    path  "versions.yml"          , emit: versions
 
     script:
-    def args = task.ext.args ?: ''
+    def args   = task.ext.args ?: '--colorMap viridis --dpi 300 --refPointLabel "TSS"'
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-
     plotHeatmap \\
         --matrixFile ${matrix} \\
         --outFileName ${prefix}.heatmap.png \\
         $args
 
-    
     plotHeatmap \\
         --matrixFile ${matrix} \\
         --outFileName ${prefix}.heatmap.pdf \\
@@ -31,6 +29,18 @@ process DEEPTOOLS_PLOTHEATMAP {
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         deeptools: \$(plotHeatmap --version | sed -e "s/plotHeatmap //g")
+    END_VERSIONS
+    """
+
+    stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
+    """
+    touch ${prefix}.heatmap.png
+    touch ${prefix}.heatmap.pdf
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        deeptools: 3.5.5
     END_VERSIONS
     """
 }
