@@ -65,12 +65,6 @@ def helpMessage() {
     """.stripIndent()
 }
 
-// --- CHECK FOR HELP FLAG ---
-if (params.help) {
-    helpMessage()
-    exit 0
-}
-
 // --- CHANNEL PREPARATION FUNCTION ---
 def create_fastq_channel(LinkedHashMap row, Set known_controls) {
     def meta = [:]
@@ -100,8 +94,14 @@ def create_fastq_channel(LinkedHashMap row, Set known_controls) {
 
 // --- MAIN WORKFLOW EXECUTION ---
 workflow {
+    // --- CHECK FOR HELP FLAG (SPOSTATO QUI DENTRO!) ---
+    if (params.help) {
+        helpMessage()
+        exit 0
+    }
+
     if (!params.input) { 
-        error "Error: Please specify an input samplesheet using --input samplesheet.csv or run 'nextflow run apgrimaldi/CATP3ak - latest --help' for available options." 
+        error "Error: Please specify an input samplesheet using --input samplesheet.csv or run 'nextflow run apgrimaldi/CATP3ak -latest --help' for available options." 
     }
     
     def known_controls = [] as Set
