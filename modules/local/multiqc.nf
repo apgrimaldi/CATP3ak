@@ -33,16 +33,9 @@ process MULTIQC {
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
 
     """
-    shopt -s nullglob
-
     # --- 1) DeepTools TSS Heatmaps (*.png) con carosello a frecce ---
-    dt_pngs=()
-    if [ -d "heatmaps_in" ]; then
-      while IFS= read -r -d '' p; do
-        dt_pngs+=("\$p")
-      done < <(find heatmaps_in -type f -iname "*.png" -print0 | sort -z)
-    fi
-
+    shopt -s nullglob
+    dt_pngs=(heatmaps_in/*.png)
     if [ \${#dt_pngs[@]} -gt 0 ]; then
       cat << 'EOF' > deeptools_heatmaps_mqc.html
 <!--
@@ -62,7 +55,7 @@ EOF
       total=\${#dt_pngs[@]}
       for p in "\${dt_pngs[@]}"; do
         fname=\$(basename "\$p")
-        b64=\$(base64 "\$p" | tr -d '\\n')
+        b64=\$(base64 -w 0 "\$p")
         disp="none"
         [ \$idx -eq 0 ] && disp="block"
         num=\$((idx + 1))
@@ -94,44 +87,37 @@ EOF
 EOF
     fi
 
-    # --- 2) SeqCode Genome Distribution (file Plot* anche senza estensione) ---
-    sc_files=()
-    if [ -d "seqcode_in" ]; then
-      while IFS= read -r -d '' f; do
-        sc_files+=("\$f")
-      done < <(find seqcode_in -type f -name 'Plot*' -print0 | sort -z)
-    fi
-
-    if [ \${#sc_files[@]} -gt 0 ]; then
+    # --- 2) SeqCode Genome Distribution (*.pdf) con carosello a frecce ---
+    sc_pdfs=(seqcode_in/*.pdf)
+    if [ \${#sc_pdfs[@]} -gt 0 ]; then
       cat << 'EOF' > seqcode_dist_mqc.html
 <!--
 id: seqcode_genome_distribution
 section_name: 'SeqCode: Genome Distribution'
-description: 'Plot SeqCode genomeDistribution (scorribili con le frecce).'
+description: 'Report PDF di SeqCode genomeDistribution (scorribili con le frecce).'
 -->
 <div style="border:1px solid #ddd; border-radius:8px; padding:16px; margin:12px 0;">
   <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:12px;">
     <button type="button" onclick="move_sc_carousel(-1)" style="padding:6px 14px; cursor:pointer; font-size:16px;">&#9664; Prev</button>
-    <span id="sc_carousel_counter" style="font-weight:600;">1 / \${#sc_files[@]}</span>
+    <span id="sc_carousel_counter" style="font-weight:600;">1 / \${#sc_pdfs[@]}</span>
     <button type="button" onclick="move_sc_carousel(1)" style="padding:6px 14px; cursor:pointer; font-size:16px;">Next &#9654;</button>
   </div>
 EOF
 
       idx=0
-      total=\${#sc_files[@]}
-      for scf in "\${sc_files[@]}"; do
-        fname=\$(basename "\$scf")
-        b64=\$(base64 "\$scf" | tr -d '\\n')
+      total=\${#sc_pdfs[@]}
+      for pdf in "\${sc_pdfs[@]}"; do
+        fname=\$(basename "\$pdf")
+        b64=\$(base64 -w 0 "\$pdf")
         disp="none"
         [ \$idx -eq 0 ] && disp="block"
         num=\$((idx + 1))
-
         cat << EOF >> seqcode_dist_mqc.html
   <div class="sc_carousel_slide" style="display:\${disp}; text-align:center;">
     <div style="font-weight:600; margin-bottom:8px;">\${fname} (\${num}/\${total})</div>
     <embed src="data:application/pdf;base64,\${b64}" type="application/pdf" style="width:100%; height:680px; border:1px solid #ccc;" />
     <div style="margin-top:8px; font-size:13px;">
-      <a download="\${fname}.pdf" href="data:application/pdf;base64,\${b64}">Scarica \${fname}</a>
+      <a download="\${fname}" href="data:application/pdf;base64,\${b64}">Scarica \${fname}</a>
     </div>
   </div>
 EOF
