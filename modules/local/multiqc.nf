@@ -33,7 +33,7 @@ process MULTIQC {
     def report_title = params.protocol == 'atac' ? "ATAC-seq Analysis Report" : "ChIP-seq Analysis Report"
 
     """
-    # --- 1) DeepTools TSS Heatmaps (*.png) con carosello a frecce ---
+    # --- 1) DeepTools TSS Heatmaps 
     shopt -s nullglob
     dt_pngs=(heatmaps_in/*.png)
     if [ \${#dt_pngs[@]} -gt 0 ]; then
@@ -41,7 +41,7 @@ process MULTIQC {
 <!--
 id: deeptools_tss_heatmaps
 section_name: 'DeepTools: TSS Heatmaps'
-description: 'Heatmap del segnale attorno ai TSS (scorribili con le frecce).'
+description: 'Signal heatmap around TSS (scrollable with arrows)'
 -->
 <div style="border:1px solid #ddd; border-radius:8px; padding:16px; margin:12px 0;">
   <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:12px;">
@@ -87,14 +87,14 @@ EOF
 EOF
     fi
 
-    # --- 2) SeqCode Genome Distribution (*.pdf) con carosello a frecce ---
+    # --- 2) SeqCode Genome Distribution 
     sc_pdfs=(seqcode_in/*.pdf)
     if [ \${#sc_pdfs[@]} -gt 0 ]; then
       cat << 'EOF' > seqcode_dist_mqc.html
 <!--
 id: seqcode_genome_distribution
 section_name: 'SeqCode: Genome Distribution'
-description: 'Report PDF di SeqCode genomeDistribution (scorribili con le frecce).'
+description: 'description: 'SeqCode genomeDistribution PDF reports (scrollable with arrows).'
 -->
 <div style="border:1px solid #ddd; border-radius:8px; padding:16px; margin:12px 0;">
   <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:12px;">
