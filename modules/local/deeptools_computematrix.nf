@@ -1,10 +1,10 @@
 process DEEPTOOLS_COMPUTEMATRIX {
     tag "$meta.id"
-    label 'process_high'
+    label 'process_medium'
 
-    
     container 'quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0'
 
+    input:
     tuple val(meta), path(bigwig)
     path  bed
 
@@ -13,11 +13,8 @@ process DEEPTOOLS_COMPUTEMATRIX {
     tuple val(meta), path("*.mat.tab"), emit: table
     path  "versions.yml"              , emit: versions
 
-    when:
-    task.ext.when == null || task.ext.when
-
     script:
-    def args = task.ext.args ?: '--referencePoint center -b 5000 -a 5000'
+    def args   = task.ext.args ?: '--referencePoint TSS -b 3000 -a 3000 --binSize 50 --skipZeros'
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     computeMatrix reference-point \\
@@ -26,7 +23,7 @@ process DEEPTOOLS_COMPUTEMATRIX {
         --scoreFileName $bigwig \\
         --outFileName ${prefix}.computeMatrix.mat.gz \\
         --outFileNameMatrix ${prefix}.computeMatrix.vals.mat.tab \\
-        --numberOfProcessors $task.cpus
+        --numberOfProcessors ${task.cpus}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -37,12 +34,12 @@ process DEEPTOOLS_COMPUTEMATRIX {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    echo "" | gzip > ${prefix}.computeMatrix.mat.gz
+    touch ${prefix}.computeMatrix.mat.gz
     touch ${prefix}.computeMatrix.vals.mat.tab
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        deeptools: \$(computeMatrix --version | sed -e "s/computeMatrix //g")
+        deeptools: 3.5.5
     END_VERSIONS
     """
 }
