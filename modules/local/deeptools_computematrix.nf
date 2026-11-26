@@ -3,9 +3,8 @@ process DEEPTOOLS_COMPUTEMATRIX {
     label 'process_high'
 
     
-    container 'biocontainers/deeptools:3.5.5--pyhdfd78af_0'
+    container 'quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0'
 
-    input:
     tuple val(meta), path(bigwig)
     path  bed
 
