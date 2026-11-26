@@ -336,7 +336,6 @@ workflow CATP3ak {
     }
 
     // --- DEEPTOOLS TSS MATRIX & HEATMAP ---
-    ch_deeptools_heatmaps_mqc = Channel.empty()
     def regions_file = bed12_file ?: gtf_file
     if (!params.skip_deeptools_heatmap && regions_file) {
 
@@ -348,11 +347,6 @@ workflow CATP3ak {
         DEEPTOOLS_PLOTHEATMAP (
             DEEPTOOLS_COMPUTEMATRIX.out.matrix
         )
-
-        ch_deeptools_heatmaps_mqc = DEEPTOOLS_PLOTHEATMAP.out.png
-            .map { meta, png -> png }
-            .collect()
-            .ifEmpty([])
 
         ch_versions = ch_versions.mix(
             DEEPTOOLS_COMPUTEMATRIX.out.versions,
@@ -384,7 +378,6 @@ workflow CATP3ak {
             ch_all_homer_mqc.flatten().collect().ifEmpty([]),
             ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
             ch_seqcode_mqc,
-            ch_deeptools_heatmaps_mqc,
             ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]),
             ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]),
             ch_versions_mqc
