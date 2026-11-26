@@ -43,6 +43,7 @@ workflow CATP3ak {
     // --- References Setup ---
     def reference_file   = null
     def gtf_file         = null
+    def bed12_file       = null
     def bowtie2_index    = null
     def blacklist_path   = null
     def chrom_sizes_file = null
@@ -53,6 +54,7 @@ workflow CATP3ak {
         def gdata        = params.genomes[params.genome]
         reference_file   = params.reference_file ?: gdata.fasta
         gtf_file         = params.gtf_file       ?: gdata.gtf
+        bed12_file       = params.bed12         ?: (gdata.containsKey('bed12') ? gdata.bed12 : null)
         bowtie2_index    = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path   = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
         chrom_sizes_file = params.chrom_sizes    ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null)
@@ -61,6 +63,7 @@ workflow CATP3ak {
     } else {
         reference_file   = params.reference_file
         gtf_file         = params.gtf_file
+        bed12_file       = params.bed12
         bowtie2_index    = params.bowtie2_index
         blacklist_path   = params.blacklist
         chrom_sizes_file = params.chrom_sizes
@@ -333,11 +336,12 @@ workflow CATP3ak {
     }
 
     // --- DEEPTOOLS TSS MATRIX & HEATMAP ---
-    if (!params.skip_deeptools_heatmap && gtf_file) {
+    def regions_file = bed12_file ?: gtf_file
+    if (!params.skip_deeptools_heatmap && regions_file) {
 
         DEEPTOOLS_COMPUTEMATRIX (
             DEEPTOOLS.out.bw_display,
-            file(gtf_file)
+            file(regions_file)
         )
 
         DEEPTOOLS_PLOTHEATMAP (
