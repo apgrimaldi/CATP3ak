@@ -15,6 +15,8 @@ include { MACS3_CHIP_BROAD } from '../modules/local/macs3_chip_broad.nf'
 include { MACS3_GROUP } from '../modules/local/macs3_group.nf'
 include { CALC_FRIP } from '../modules/local/calc_frip.nf'
 include { DEEPTOOLS } from '../modules/local/deeptools.nf'
+include { DEEPTOOLS_COMPUTEMATRIX } from '../modules/local/deeptools_computematrix.nf'
+include { DEEPTOOLS_PLOTHEATMAP } from '../modules/local/deeptools_plotheatmap.nf'
 include { LANCEOTRON } from '../modules/local/lanceotron.nf'
 include { OMNIPEAK } from '../modules/local/omnipeak.nf'
 include { OMNIPEAK_ATAC } from '../modules/local/omnipeak_atac.nf'
@@ -28,9 +30,6 @@ include { HOMER_ANNOTATEPEAKS as HOMER_OMNI } from '../modules/local/homer_annot
 include { DIFFBIND as DIFFBIND_MACS } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_LANCE } from '../modules/local/diffbind.nf'
 include { DIFFBIND as DIFFBIND_OMNI } from '../modules/local/diffbind.nf'
-include { PROFILEPLYR as PROFILEPLYR_MACS } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_LANCE } from '../modules/local/profileplyr.nf'
-include { PROFILEPLYR as PROFILEPLYR_OMNI } from '../modules/local/profileplyr.nf'
 include { SEQCODE_GENOMEDISTRIBUTION } from '../modules/local/seqcode_genomedistribution.nf'
 
 workflow CATP3ak {
@@ -47,8 +46,8 @@ workflow CATP3ak {
     def bowtie2_index    = null
     def blacklist_path   = null
     def chrom_sizes_file = null
-    def refgene_file     = null 
-    def m_genome         = params.macs_gsize 
+    def refgene_file     = null
+    def m_genome         = params.macs_gsize
 
     if (params.genomes && params.genomes.containsKey(params.genome)) {
         def gdata        = params.genomes[params.genome]
@@ -56,8 +55,8 @@ workflow CATP3ak {
         gtf_file         = params.gtf_file       ?: gdata.gtf
         bowtie2_index    = params.bowtie2_index  ?: gdata.bowtie2
         blacklist_path   = params.blacklist      ?: (gdata.containsKey('blacklist') ? gdata.blacklist : null)
-        chrom_sizes_file = params.chrom_sizes    ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null) 
-        refgene_file     = params.refgene        ?: (gdata.containsKey('refgene') ? gdata.refgene : null) // <-- Caricamento
+        chrom_sizes_file = params.chrom_sizes    ?: (gdata.containsKey('chrom_sizes') ? gdata.chrom_sizes : null)
+        refgene_file     = params.refgene        ?: (gdata.containsKey('refgene') ? gdata.refgene : null)
         if (!m_genome) m_genome = gdata.macs_gsize
     } else {
         reference_file   = params.reference_file
@@ -69,7 +68,7 @@ workflow CATP3ak {
     }
     if (!m_genome || m_genome == 'custom') { m_genome = 'hs' }
 
-    ch_index_internal = Channel.empty() 
+    ch_index_internal = Channel.empty()
     if (bowtie2_index) {
         ch_index_internal = Channel.fromPath("${bowtie2_index}/*.bt2*").collect()
     } else if (reference_file) {
@@ -93,7 +92,7 @@ workflow CATP3ak {
     ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions)
 
     SAMTOOLS_INDEX ( PICARD_MARKDUPLICATES.out.bam )
-    
+
     if (blacklist_path) {
         FILTERING ( SAMTOOLS_INDEX.out.bam_bai, file(blacklist_path) )
         SAMTOOLS_INDEX_FINAL ( FILTERING.out.bam )
@@ -103,7 +102,7 @@ workflow CATP3ak {
     }
 
     SAMTOOLS_STATS ( ch_final_bams.map { meta, bam, bai -> [ meta, bam ] } )
-    
+
     DEEPTOOLS ( ch_final_bams )
 
     ch_bams_branched = ch_final_bams.branch { meta, bam, bai ->
@@ -129,8 +128,8 @@ workflow CATP3ak {
 
             ch_lanceotron_input = ch_ip_l6n
                 .combine(ch_ctrl_l6n, by: 0)
-                .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw -> 
-                    [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ] 
+                .map { ctrl_id, meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ->
+                    [ meta, ip_bam, ip_bw, ctrl_bam, ctrl_bw ]
                 }
         }
 
@@ -166,40 +165,40 @@ workflow CATP3ak {
             MACS3_CHIP_BROAD ( ch_macs_chip_input, m_genome )
             ch_narrow_peaks = MACS3_CHIP_NARROW.out.peaks
             ch_broad_peaks  = MACS3_CHIP_BROAD.out.peaks
-            
+
             ch_ip_group = ch_bams_branched.ip
-                .map { meta, bam, bai -> 
+                .map { meta, bam, bai ->
                     def anti = meta.antibody ?: "IP"
                     def cond = meta.condition ?: "cond"
                     def group_id = meta.group ?: "${anti}_${cond}"
-                    [ group_id, meta, bam ] 
+                    [ group_id, meta, bam ]
                 }
                 .groupTuple(by: 0)
-                
+
             ch_ct_group = ch_bams_branched.control
-                .map { meta, bam, bai -> 
-                    def anti = meta.antibody ?: "IP" 
+                .map { meta, bam, bai ->
+                    def anti = meta.antibody ?: "IP"
                     def cond = meta.condition ?: "cond"
                     def group_id = meta.group ?: "${anti}_${cond}"
-                    [ group_id, bam ] 
+                    [ group_id, bam ]
                 }
                 .groupTuple(by: 0)
 
             ch_macs_group_input = ch_ip_group.join(ch_ct_group, by: 0)
-                .map { group_id, metas, ip_bams, ctrl_bams -> 
+                .map { group_id, metas, ip_bams, ctrl_bams ->
                     def new_meta = metas[0].clone()
                     new_meta.id = group_id + "_grouped"
-                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ] 
+                    [ new_meta, ip_bams.flatten(), ctrl_bams.flatten().unique() ]
                 }
 
-          MACS3_GROUP ( ch_macs_group_input, m_genome )
-            
+            MACS3_GROUP ( ch_macs_group_input, m_genome )
+
             ch_narrow_counts_mqc = MACS3_CHIP_NARROW.out.count_narrow
             ch_broad_counts_mqc  = MACS3_CHIP_BROAD.out.count_broad
             ch_macs_logs_mqc = MACS3_CHIP_NARROW.out.xls.map{ it[1] }
                                 .mix(MACS3_CHIP_BROAD.out.xls.map{ it[1] })
                                 .mix(MACS3_GROUP.out.xls.map{ it[1] })
-                                
+
             ch_versions = ch_versions.mix(MACS3_GROUP.out.versions)
         }
     }
@@ -216,22 +215,22 @@ workflow CATP3ak {
 
         if (params.protocol == 'atac') {
             ch_omni_input = ch_bams_branched.ip.map { meta, bam, bai -> [ meta, bam ] }
-            
+
             OMNIPEAK_ATAC ( ch_omni_input, ch_chrom_sizes )
             ch_omni_peaks = OMNIPEAK_ATAC.out.peaks
             ch_omni_counts_mqc = OMNIPEAK_ATAC.out.counts_mqc
             ch_versions = ch_versions.mix(OMNIPEAK_ATAC.out.versions)
-            
+
         } else {
             ch_ip_omni = ch_bams_branched.ip.map { meta, bam, bai -> [ meta.control, [meta, bam] ] }
             ch_ct_omni = ch_bams_branched.control.map { meta, bam, bai -> [ meta.id, bam ] }
-            
+
             ch_omni_input = ch_ip_omni.join(ch_ct_omni, remainder: true)
-                .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null && ctrl_bam != null } 
-                .map { ctrl_id, meta_bam, ctrl_bam -> 
-                    [ meta_bam[0], meta_bam[1], ctrl_bam ] 
+                .filter { ctrl_id, meta_bam, ctrl_bam -> meta_bam != null && ctrl_bam != null }
+                .map { ctrl_id, meta_bam, ctrl_bam ->
+                    [ meta_bam[0], meta_bam[1], ctrl_bam ]
                 }
-                
+
             OMNIPEAK ( ch_omni_input, ch_chrom_sizes )
             ch_omni_peaks = OMNIPEAK.out.peaks
             ch_omni_counts_mqc = OMNIPEAK.out.counts_mqc
@@ -276,7 +275,7 @@ workflow CATP3ak {
     ch_diffbind_macs_mqc  = Channel.empty()
     ch_diffbind_lance_mqc = Channel.empty()
     ch_diffbind_omni_mqc  = Channel.empty()
-    
+
     ch_diffbind_macs_sig  = Channel.empty()
     ch_diffbind_lance_sig = Channel.empty()
     ch_diffbind_omni_sig  = Channel.empty()
@@ -310,45 +309,44 @@ workflow CATP3ak {
         }
     }
 
-    // --- PROFILEPLYR ---
-    ch_profileplyr_mqc = Channel.empty()
-    if (!params.skip_profileplyr) {
-        
-        if (!params.skip_lanceotron) {
-            PROFILEPLYR_LANCE ( ch_diffbind_lance_sig.collect().ifEmpty([]), FILTER_LANCEOTRON.out.filtered_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "lanceotron" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_LANCE.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_LANCE.out.versions)
+    // --- SEQCODE GENOME DISTRIBUTION ---
+    ch_seqcode_mqc = Channel.empty()
+    if (!params.skip_seqcode && refgene_file && chrom_sizes_file) {
+
+        ch_seqcode_input = ch_narrow_peaks.filter { meta, peak ->
+            peak != null && peak.exists() && peak.size() > 0
         }
 
-        if (!params.skip_macs3) {
-            PROFILEPLYR_MACS ( ch_diffbind_macs_sig.collect().ifEmpty([]), ch_narrow_peaks.map{ it[1] }.collect(), DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "macs3" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_MACS.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_MACS.out.versions)
-        }
+        SEQCODE_GENOMEDISTRIBUTION (
+            ch_seqcode_input,
+            file(refgene_file),
+            file(chrom_sizes_file)
+        )
 
-        if (!params.skip_omnipeak) {
-            ch_omni_peaks_plyr = ch_omni_peaks.map { meta, peak -> 
-                return (peak && peak.exists() && peak.size() > 0) ? peak : [] 
-            }.collect()
-            PROFILEPLYR_OMNI ( ch_diffbind_omni_sig.collect().ifEmpty([]), ch_omni_peaks_plyr, DEEPTOOLS.out.bw_display.map{ it[1] }.collect(),file(gtf_file), "omnipeak" )
-            ch_profileplyr_mqc = ch_profileplyr_mqc.mix(PROFILEPLYR_OMNI.out.mqc_html)
-            ch_versions = ch_versions.mix(PROFILEPLYR_OMNI.out.versions)
-        }
+        ch_seqcode_mqc = SEQCODE_GENOMEDISTRIBUTION.out.results
+            .map { meta, files -> files }
+            .flatten()
+            .collect()
+            .ifEmpty([])
 
-        ch_profileplyr_mqc = ch_profileplyr_mqc.collect().ifEmpty([])
+        ch_versions = ch_versions.mix(SEQCODE_GENOMEDISTRIBUTION.out.versions)
     }
 
-    // --- SEQCODE GENOME DISTRIBUTION ---
-    if (!params.skip_seqcode && refgene_file && chrom_sizes_file) {
-        
-        ch_seqcode_input = ch_narrow_peaks.filter { meta, peak -> 
-            peak != null && peak.exists() && peak.size() > 0 
-        }
-        
-        SEQCODE_GENOMEDISTRIBUTION ( 
-            ch_seqcode_input, 
-            file(refgene_file), 
-            file(chrom_sizes_file)
+    // --- DEEPTOOLS TSS MATRIX & HEATMAP ---
+    if (!params.skip_deeptools_heatmap && gtf_file) {
+
+        DEEPTOOLS_COMPUTEMATRIX (
+            DEEPTOOLS.out.bw_display,
+            file(gtf_file)
+        )
+
+        DEEPTOOLS_PLOTHEATMAP (
+            DEEPTOOLS_COMPUTEMATRIX.out.matrix
+        )
+
+        ch_versions = ch_versions.mix(
+            DEEPTOOLS_COMPUTEMATRIX.out.versions,
+            DEEPTOOLS_PLOTHEATMAP.out.versions
         )
     }
 
@@ -375,9 +373,9 @@ workflow CATP3ak {
             ch_frip_mqc.map(getFile).collect().ifEmpty([]),
             ch_all_homer_mqc.flatten().collect().ifEmpty([]),
             ch_all_diffbind_mqc.flatten().collect().ifEmpty([]),
-            ch_profileplyr_mqc.flatten().collect().ifEmpty([]), // <-- Ripristinato!
-            ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]), 
-            ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]), 
+            ch_seqcode_mqc,
+            ch_lanceotron_counts_mqc.map(getFile).collect().ifEmpty([]),
+            ch_omni_counts_mqc.map(getFile).collect().ifEmpty([]),
             ch_versions_mqc
         )
     }
